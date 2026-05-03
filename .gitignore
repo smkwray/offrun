@@ -1,0 +1,48 @@
+# Local orchestration and planning notes
+do/
+AGENTS.md
+
+# Internal docs and scratch planning
+docs/
+plans/
+*.plan.md
+plan.md
+
+# Environment and secrets
+.env
+.env.*
+.venv/
+venv/
+.python-version
+
+# Python artifacts and caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# Data and generated outputs stay local
+data/raw/**
+data/imported/**
+data/derived/**
+output/**
+
+!data/raw/.gitkeep
+!data/imported/.gitkeep
+!data/derived/.gitkeep
+!output/reports/
+!output/reports/.gitkeep
+!output/figures/
+!output/figures/.gitkeep
+!output/tables/
+!output/tables/.gitkeep
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/
