@@ -1,0 +1,4 @@
+operation_id,announcement_date,operation_date,security_type,maturity_bucket,offered_amount_usd_millions,accepted_amount_usd_millions,operation_purpose,source_family
+BB2024A,2024-05-01,2024-05-15,nominal_coupon,7-10y,2000,1500,liquidity_support,fixture_buybacks
+BB2024B,2024-06-03,2024-06-12,nominal_coupon,20-30y,1500,600,liquidity_support,fixture_buybacks
+BB2024C,2024-06-17,2024-06-26,TIPS,10-20y,1000,250,cash_management,fixture_buybacks

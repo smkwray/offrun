@@ -1,0 +1,98 @@
+datasets:
+  buyback_operations:
+    primary_key:
+      - operation_id
+    required_columns:
+      - operation_id
+      - announcement_date
+      - operation_date
+      - security_type
+      - maturity_bucket
+      - offered_amount_usd_millions
+      - accepted_amount_usd_millions
+      - acceptance_ratio
+  buyback_event_calendar:
+    primary_key:
+      - operation_id
+      - event_type
+      - window_date
+    required_columns:
+      - operation_id
+      - event_type
+      - event_date
+      - window_date
+      - event_day
+      - maturity_bucket
+      - targeted_bucket
+  trace_liquidity_context:
+    primary_key:
+      - date
+      - maturity_bucket
+    required_columns:
+      - date
+      - maturity_bucket
+      - trace_category
+      - trading_volume_usd_millions
+      - outstanding_usd_millions
+      - trace_turnover
+  dealer_liquidity_context:
+    primary_key:
+      - date
+      - maturity_bucket
+    required_columns:
+      - date
+      - maturity_bucket
+      - dealer_category
+      - net_positions_usd_millions
+      - financing_usd_millions
+      - fails_to_deliver_usd_millions
+      - fails_to_receive_usd_millions
+      - dealer_fails_total_usd_millions
+  liquidity_context_panel:
+    primary_key:
+      - date
+      - maturity_bucket
+    required_columns:
+      - date
+      - maturity_bucket
+      - trading_volume_usd_millions
+      - trace_turnover
+      - net_positions_usd_millions
+      - financing_usd_millions
+      - dealer_fails_total_usd_millions
+      - liquidity_proxy_count
+  offrun_panel:
+    primary_key:
+      - operation_id
+      - event_type
+      - window_date
+      - comparison_maturity_bucket
+    required_columns:
+      - operation_id
+      - event_type
+      - event_day
+      - window_date
+      - target_maturity_bucket
+      - comparison_maturity_bucket
+      - targeted_bucket
+      - accepted_amount_usd_millions
+      - trace_turnover
+      - dealer_fails_total_usd_millions
+  buyback_event_summary:
+    primary_key:
+      - operation_id
+      - event_type
+      - comparison_maturity_bucket
+      - targeted_bucket
+    required_columns:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+      - comparison_maturity_bucket
+      - targeted_bucket
+      - pre_event_trace_turnover_mean
+      - post_event_trace_turnover_mean
+      - post_minus_pre_trace_turnover
+      - pre_event_fails_mean
+      - post_event_fails_mean
+      - post_minus_pre_fails

@@ -1,0 +1,100 @@
+sibling_sources:
+  tdcladder:
+    required: true
+    role: maturity and liquidity ladder context; TRACE turnover precedents
+    artifacts:
+      - name: monthly_ladder_panel
+        source_path: data/clean/monthly_ladder_panel.csv
+        import_path: data/imported/tdcladder/monthly_ladder_panel.csv
+        required: true
+        required_columns:
+          - date
+          - maturity_bucket
+          - outstanding_usd_millions
+          - liquidity_weight
+  buycurve:
+    required: true
+    role: Treasury issuance composition and maturity context
+    artifacts:
+      - name: monthly_issuance_maturity_context
+        source_path: output/tables/monthly_issuance_maturity_context.csv
+        import_path: data/imported/buycurve/monthly_issuance_maturity_context.csv
+        required: true
+        required_columns:
+          - date
+          - maturity_bucket
+          - gross_issuance_usd_millions
+          - bill_share
+          - wam_months
+  liqsub:
+    required: true
+    role: liquidity-plumbing diagnostics for interpretation sidecars
+    artifacts:
+      - name: monthly_liquidity_plumbing
+        source_path: output/tables/monthly_liquidity_plumbing.csv
+        import_path: data/imported/liqsub/monthly_liquidity_plumbing.csv
+        required: true
+        required_columns:
+          - date
+          - tga_usd_millions
+          - reserves_usd_millions
+          - mmf_assets_usd_millions
+          - on_rrp_usd_millions
+  rowflow:
+    required: false
+    role: optional rest-of-world Treasury absorption context only if useful
+    artifacts:
+      - name: rowflow_panel
+        source_path: data/derived/rowflow_panel.csv
+        import_path: data/imported/rowflow/rowflow_panel.csv
+        required: false
+        required_columns:
+          - date
+          - foreign_official_flow_usd_millions
+          - foreign_private_flow_usd_millions
+
+public_sources:
+  treasury_buybacks_fiscaldata:
+    priority: primary
+    role: Treasury buyback operations, announcements, and results
+    url: https://fiscaldata.treasury.gov/datasets/treasury-securities-buybacks/
+    local_raw_path: data/raw/fiscaldata/treasury_securities_buybacks.csv
+    required_columns:
+      - operation_date
+      - security_type
+      - maturity_bucket
+      - offered_amount_usd_millions
+      - accepted_amount_usd_millions
+  treasurydirect_buybacks:
+    priority: primary
+    role: buyback announcements, schedules, operation-level results, and FAQ context
+    url: https://treasurydirect.gov/auctions/announcements-data-results/buy-backs/
+    local_raw_path: data/raw/treasurydirect/buyback_announcements_results.csv
+  finra_trace_treasury_aggregates:
+    priority: primary_public_aggregate_only
+    role: public aggregate Treasury volume and turnover proxies; not CUSIP-level liquidity
+    url: https://www.finra.org/filing-reporting/trace/data/trace-treasury-aggregates/about
+    local_raw_path: data/raw/trace/trace_treasury_aggregates.csv
+    required_columns:
+      - date
+      - maturity_bucket
+      - trading_volume_usd_millions
+      - outstanding_usd_millions
+  nyfed_primary_dealer_statistics:
+    priority: primary
+    role: weekly positions, transactions, financing, and fails diagnostics
+    url: https://www.newyorkfed.org/markets/counterparties/primary-dealers-statistics
+    local_raw_path: data/raw/nyfed/primary_dealer_statistics.csv
+    required_columns:
+      - date
+      - maturity_bucket
+      - net_positions_usd_millions
+      - financing_usd_millions
+      - fails_to_deliver_usd_millions
+      - fails_to_receive_usd_millions
+  h15_gsw_controls:
+    priority: optional_control
+    role: yield and rate controls only if needed
+    urls:
+      - https://www.federalreserve.gov/releases/h15/
+      - https://www.federalreserve.gov/data/yield-curve-models.htm

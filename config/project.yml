@@ -1,0 +1,43 @@
+project:
+  name: offrun
+  title: Treasury Buybacks and Off-the-Run Liquidity
+  version: 0.1.0
+  purpose: >-
+    Build a bounded Treasury buybacks and off-the-run liquidity evidence package
+    for the Treasury Deposit Channel project family.
+  core_question: >-
+    Can Treasury buyback operations improve off-the-run Treasury liquidity or
+    reduce dealer balance-sheet pressure in publicly observable data?
+  external_venv: ~/venvs/offrun
+  default_frequency: event_window
+
+paths:
+  buyback_operations: data/derived/buyback_operations.csv
+  buyback_event_calendar: data/derived/buyback_event_calendar.csv
+  trace_liquidity_context: data/derived/trace_liquidity_context.csv
+  dealer_liquidity_context: data/derived/dealer_liquidity_context.csv
+  liquidity_context_panel: data/derived/liquidity_context_panel.csv
+  offrun_panel: data/derived/offrun_panel.csv
+  buyback_event_summary: output/tables/buyback_event_summary.csv
+  source_inventory: output/tables/source_inventory.csv
+  report: output/reports/offrun_accounting_report.md
+  buyback_timeline_figure: output/figures/buyback_timeline.svg
+  targeted_bucket_figure: output/figures/targeted_bucket_event_windows.svg
+  manifest: output/manifests/offrun_manifest.json
+
+claim_boundary:
+  required_report_phrases:
+    - descriptive market-liquidity evidence
+  allowed_claims:
+    - descriptive market-liquidity evidence
+    - event windows around buyback announcement and operation dates
+    - targeted maturity-bucket versus nearby-bucket comparisons when supported
+    - dealer-position, fails, and financing diagnostics
+  forbidden_unqualified_phrases:
+    - proves causal liquidity effects
+    - identifies domestic liquidity pass-through
+    - causes domestic liquidity pass-through
+    - proves buybacks improve domestic liquidity
+    - CUSIP-level liquidity from public TRACE aggregate data
+    - buybacks make long-duration debt money-like in the same way as Treasury bills
+    - Treasury targets are exogenous

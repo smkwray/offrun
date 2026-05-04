@@ -1,0 +1,45 @@
+maturity_buckets:
+  order:
+    - 1-3y
+    - 3-7y
+    - 7-10y
+    - 10-20y
+    - 20-30y
+  nearby_control_buckets:
+    1-3y:
+      - 3-7y
+    3-7y:
+      - 1-3y
+      - 7-10y
+    7-10y:
+      - 3-7y
+      - 10-20y
+    10-20y:
+      - 7-10y
+      - 20-30y
+    20-30y:
+      - 10-20y
+
+event_windows:
+  daily_business_days:
+    pre: 10
+    post: 20
+  weekly_dealer:
+    pre: 4
+    post: 8
+
+liquidity_proxies:
+  trace:
+    - trading_volume_usd_millions
+    - trace_turnover
+  dealer:
+    - net_positions_usd_millions
+    - financing_usd_millions
+    - fails_to_deliver_usd_millions
+    - fails_to_receive_usd_millions
+    - dealer_fails_total_usd_millions
+
+operation_fields:
+  amount_unit: USD millions
+  acceptance_ratio_formula: accepted_amount_usd_millions / offered_amount_usd_millions
+  buyback_intensity_placeholder: accepted_amount_usd_millions / outstanding_offrun_usd_millions

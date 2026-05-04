@@ -1,9 +1,6 @@
-# Local orchestration and planning notes
+# Local orchestration and handoff notes
 do/
 AGENTS.md
-
-# Internal docs and scratch planning
-docs/
 plans/
 *.plan.md
 plan.md
@@ -26,21 +23,11 @@ __pycache__/
 build/
 dist/
 
-# Data and generated outputs stay local
+# Raw, imported, derived, and generated artifacts stay local
 data/raw/**
 data/imported/**
 data/derived/**
 output/**
-
-!data/raw/.gitkeep
-!data/imported/.gitkeep
-!data/derived/.gitkeep
-!output/reports/
-!output/reports/.gitkeep
-!output/figures/
-!output/figures/.gitkeep
-!output/tables/
-!output/tables/.gitkeep
 
 # OS/editor noise
 .DS_Store
