@@ -410,7 +410,14 @@ def normalize_direct_finra_trace_context(
             continue
         security_type = _first_present(
             row,
-            ("security_type", "product", "security", "asset_type", "instrument_type"),
+            (
+                "trace_security_type",
+                "security_type",
+                "product",
+                "security",
+                "asset_type",
+                "instrument_type",
+            ),
         )
         on_off_run = _normalize_on_off_run(
             _first_present(

@@ -189,6 +189,25 @@ def _format_counts(counts: dict[str, int]) -> str:
     return ", ".join(f"{key}: {value}" for key, value in counts.items()) or "none"
 
 
+def _trace_source_note(trace_rows: list[dict[str, str]]) -> str:
+    source_families = {row.get("source_family", "") for row in trace_rows}
+    has_finra_direct = any(
+        source.startswith("finra_treasury_aggregate") for source in source_families
+    )
+    if has_finra_direct:
+        return (
+            "Direct FINRA Treasury aggregate rows are used when locally available. "
+            "They preserve public aggregate maturity and on/off-run groupings, but "
+            "remain aggregate public volume/turnover proxies rather than "
+            "CUSIP-level or transaction-level liquidity data."
+        )
+    return (
+        "TRACE turnover is a broad public aggregate proxy repeated across analysis "
+        "buckets for event-window alignment; it is not maturity-bucket or "
+        "CUSIP-level liquidity."
+    )
+
+
 def _top_rows(rows: list[dict[str, str]], count: int = 8) -> list[dict[str, str]]:
     return sorted(rows, key=lambda row: as_float(row.get("triage_rank")))[:count]
 
@@ -313,6 +332,7 @@ def write_offrun_report(
     panel_rows = read_csv(panel_file)
     summary_rows = read_csv(summary_file)
     operation_rows = read_csv(config.path("buyback_operations"))
+    trace_context_rows = read_csv(config.path("trace_liquidity_context"))
     reconciliation_rows = read_csv(config.path("buyback_source_reconciliation"))
     diagnostics_rows = read_csv(config.path("event_diagnostics"))
     triage_rows = read_csv(config.path("results_triage"))
@@ -390,9 +410,10 @@ def write_offrun_report(
         "synthetic; it is intended to verify source contracts, panel joins, claim-boundary "
         "checks, and report wiring before any real raw data are added"
         if fixture_build
-        else "based on local public-source and sibling-project inputs. TRACE rows are broad "
-        "public aggregate proxies and dealer rows are aggregate Primary Dealer Statistics context"
+        else "based on local public-source and sibling-project inputs. TRACE rows are public "
+        "aggregate proxies and dealer rows are aggregate Primary Dealer Statistics context"
     )
+    trace_source_note = _trace_source_note(trace_context_rows)
 
     fixture_note = (
         """## Fixture note
@@ -401,11 +422,10 @@ The included fixtures are intentionally tiny. They are not evidence about real
 Treasury markets; they only exercise the offrun code paths and validation gates.
 """
         if fixture_build
-        else """## Source note
+        else f"""## Source note
 
-The real build uses ignored local raw/imported data plus sibling outputs. TRACE
-turnover is a broad public aggregate proxy repeated across analysis buckets for
-event-window alignment; it is not maturity-bucket or CUSIP-level liquidity.
+The real build uses ignored local raw/imported data plus sibling outputs.
+{trace_source_note}
 Dealer context uses bucket-mapped aggregate primary-dealer net positions plus
 aggregate Treasury financing and fails series repeated across analysis buckets.
 """
