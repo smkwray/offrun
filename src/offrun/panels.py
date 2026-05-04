@@ -43,6 +43,13 @@ def _schema_fields(config: OffrunConfig, dataset: str) -> list[str]:
     return [str(field) for field in fields]
 
 
+def _optional_number(value: object) -> str:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return ""
+    return format_number(as_float(text))
+
+
 def _bucket_order(config: OffrunConfig) -> list[str]:
     buckets = config.variables.get("maturity_buckets", {})
     if not isinstance(buckets, Mapping):
@@ -235,20 +242,22 @@ def build_liquidity_context_panel(
 
     dealer_rows: list[dict[str, str]] = []
     for row in read_csv(dealer_file):
-        fails_deliver = as_float(row.get("fails_to_deliver_usd_millions"))
-        fails_receive = as_float(row.get("fails_to_receive_usd_millions"))
-        fails_total = fails_deliver + fails_receive
+        fails_deliver_text = _optional_number(row.get("fails_to_deliver_usd_millions"))
+        fails_receive_text = _optional_number(row.get("fails_to_receive_usd_millions"))
+        fails_total = ""
+        if fails_deliver_text or fails_receive_text:
+            fails_total = format_number(as_float(fails_deliver_text) + as_float(fails_receive_text))
         normalized = {
             "date": row.get("date", "").strip(),
             "maturity_bucket": row.get("maturity_bucket", "").strip(),
             "dealer_category": row.get("dealer_category", "treasury").strip(),
-            "net_positions_usd_millions": format_number(
-                as_float(row.get("net_positions_usd_millions"))
+            "net_positions_usd_millions": _optional_number(
+                row.get("net_positions_usd_millions")
             ),
-            "financing_usd_millions": format_number(as_float(row.get("financing_usd_millions"))),
-            "fails_to_deliver_usd_millions": format_number(fails_deliver),
-            "fails_to_receive_usd_millions": format_number(fails_receive),
-            "dealer_fails_total_usd_millions": format_number(fails_total),
+            "financing_usd_millions": _optional_number(row.get("financing_usd_millions")),
+            "fails_to_deliver_usd_millions": fails_deliver_text,
+            "fails_to_receive_usd_millions": fails_receive_text,
+            "dealer_fails_total_usd_millions": fails_total,
             "source_family": row.get("source_family", "fixture_dealer").strip() or "fixture_dealer",
         }
         dealer_rows.append(normalized)
@@ -314,6 +323,8 @@ def _build_panel_row(
     context_row: Mapping[str, str] | None,
 ) -> dict[str, str]:
     context = context_row or {}
+    accepted = as_float(event_row.get("accepted_amount_usd_millions"))
+    sibling_outstanding = as_float(context.get("sibling_outstanding_usd_millions"))
     return {
         "operation_id": event_row.get("operation_id", ""),
         "event_type": event_row.get("event_type", ""),
@@ -327,6 +338,11 @@ def _build_panel_row(
         "accepted_amount_usd_millions": event_row.get("accepted_amount_usd_millions", ""),
         "offered_amount_usd_millions": event_row.get("offered_amount_usd_millions", ""),
         "acceptance_ratio": event_row.get("acceptance_ratio", ""),
+        "sibling_outstanding_usd_millions": context.get("sibling_outstanding_usd_millions", ""),
+        "sibling_liquidity_weight": context.get("sibling_liquidity_weight", ""),
+        "buyback_intensity": format_number(
+            accepted / sibling_outstanding if sibling_outstanding else None
+        ),
         "trading_volume_usd_millions": context.get("trading_volume_usd_millions", ""),
         "trace_turnover": context.get("trace_turnover", ""),
         "net_positions_usd_millions": context.get("net_positions_usd_millions", ""),
@@ -341,6 +357,76 @@ def _mean(values: list[float]) -> float | None:
     if not non_missing:
         return None
     return sum(non_missing) / len(non_missing)
+
+
+def _values(
+    rows: list[dict[str, str]],
+    field: str,
+    *,
+    day_min: int | None = None,
+    day_max: int | None = None,
+) -> list[float]:
+    values: list[float] = []
+    for row in rows:
+        if not row.get(field):
+            continue
+        event_day = int(as_float(row.get("event_day")))
+        if day_min is not None and event_day < day_min:
+            continue
+        if day_max is not None and event_day > day_max:
+            continue
+        values.append(as_float(row.get(field), default=float("nan")))
+    return values
+
+
+def _mean_for(
+    rows: list[dict[str, str]],
+    field: str,
+    *,
+    day_min: int | None = None,
+    day_max: int | None = None,
+) -> float | None:
+    return _mean(_values(rows, field, day_min=day_min, day_max=day_max))
+
+
+def _change(
+    rows: list[dict[str, str]],
+    field: str,
+    *,
+    pre_min: int | None = None,
+    pre_max: int = -1,
+    post_min: int = 1,
+    post_max: int | None = None,
+) -> float | None:
+    pre = _mean_for(rows, field, day_min=pre_min, day_max=pre_max)
+    post = _mean_for(rows, field, day_min=post_min, day_max=post_max)
+    if pre is None or post is None:
+        return None
+    return post - pre
+
+
+def _pretrend_change(rows: list[dict[str, str]], field: str) -> float | None:
+    early = _mean_for(rows, field, day_max=-6)
+    late = _mean_for(rows, field, day_min=-5, day_max=-1)
+    if early is None or late is None:
+        return None
+    return late - early
+
+
+def _nonmissing_count(rows: list[dict[str, str]], field: str) -> int:
+    return sum(1 for row in rows if row.get(field))
+
+
+def _status_from_coverage(trace_rows: int, dealer_rows: int, fails_rows: int) -> str:
+    if trace_rows and dealer_rows and fails_rows:
+        return "trace_dealer_fails"
+    if trace_rows and dealer_rows:
+        return "trace_dealer_position"
+    if trace_rows:
+        return "trace_only"
+    if dealer_rows:
+        return "dealer_position_only"
+    return "no_proxy_rows"
 
 
 def _summary_rows(panel_rows: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -361,30 +447,14 @@ def _summary_rows(panel_rows: list[dict[str, str]]) -> list[dict[str, str]]:
         _comparison_bucket,
         _targeted,
     ), rows in sorted(grouped.items()):
-        pre_turnover = [
-            as_float(row.get("trace_turnover"), default=float("nan"))
-            for row in rows
-            if as_float(row.get("event_day")) < 0 and row.get("trace_turnover")
-        ]
-        post_turnover = [
-            as_float(row.get("trace_turnover"), default=float("nan"))
-            for row in rows
-            if as_float(row.get("event_day")) > 0 and row.get("trace_turnover")
-        ]
-        pre_fails = [
-            as_float(row.get("dealer_fails_total_usd_millions"), default=float("nan"))
-            for row in rows
-            if as_float(row.get("event_day")) < 0 and row.get("dealer_fails_total_usd_millions")
-        ]
-        post_fails = [
-            as_float(row.get("dealer_fails_total_usd_millions"), default=float("nan"))
-            for row in rows
-            if as_float(row.get("event_day")) > 0 and row.get("dealer_fails_total_usd_millions")
-        ]
-        pre_turnover_mean = _mean(pre_turnover)
-        post_turnover_mean = _mean(post_turnover)
-        pre_fails_mean = _mean(pre_fails)
-        post_fails_mean = _mean(post_fails)
+        pre_turnover_mean = _mean_for(rows, "trace_turnover", day_max=-1)
+        post_turnover_mean = _mean_for(rows, "trace_turnover", day_min=1)
+        pre_fails_mean = _mean_for(rows, "dealer_fails_total_usd_millions", day_max=-1)
+        post_fails_mean = _mean_for(rows, "dealer_fails_total_usd_millions", day_min=1)
+        pre_net_position_mean = _mean_for(rows, "net_positions_usd_millions", day_max=-1)
+        post_net_position_mean = _mean_for(rows, "net_positions_usd_millions", day_min=1)
+        pre_financing_mean = _mean_for(rows, "financing_usd_millions", day_max=-1)
+        post_financing_mean = _mean_for(rows, "financing_usd_millions", day_min=1)
         first = rows[0]
         summary.append(
             {
@@ -393,6 +463,8 @@ def _summary_rows(panel_rows: list[dict[str, str]]) -> list[dict[str, str]]:
                 "target_maturity_bucket": first["target_maturity_bucket"],
                 "comparison_maturity_bucket": first["comparison_maturity_bucket"],
                 "targeted_bucket": first["targeted_bucket"],
+                "accepted_amount_usd_millions": first.get("accepted_amount_usd_millions", ""),
+                "buyback_intensity": first.get("buyback_intensity", ""),
                 "pre_event_trace_turnover_mean": format_number(pre_turnover_mean),
                 "post_event_trace_turnover_mean": format_number(post_turnover_mean),
                 "post_minus_pre_trace_turnover": format_number(
@@ -407,10 +479,326 @@ def _summary_rows(panel_rows: list[dict[str, str]]) -> list[dict[str, str]]:
                     if pre_fails_mean is None or post_fails_mean is None
                     else post_fails_mean - pre_fails_mean
                 ),
+                "pre_event_net_position_mean": format_number(pre_net_position_mean),
+                "post_event_net_position_mean": format_number(post_net_position_mean),
+                "post_minus_pre_net_position": format_number(
+                    None
+                    if pre_net_position_mean is None or post_net_position_mean is None
+                    else post_net_position_mean - pre_net_position_mean
+                ),
+                "pre_event_financing_mean": format_number(pre_financing_mean),
+                "post_event_financing_mean": format_number(post_financing_mean),
+                "post_minus_pre_financing": format_number(
+                    None
+                    if pre_financing_mean is None or post_financing_mean is None
+                    else post_financing_mean - pre_financing_mean
+                ),
+                "trace_rows": str(_nonmissing_count(rows, "trace_turnover")),
+                "dealer_position_rows": str(_nonmissing_count(rows, "net_positions_usd_millions")),
+                "dealer_fails_rows": str(
+                    _nonmissing_count(rows, "dealer_fails_total_usd_millions")
+                ),
                 "event_window_rows": str(len(rows)),
             }
         )
     return summary
+
+
+def _grouped_panel(panel_rows: list[dict[str, str]]) -> dict[tuple[str, str], list[dict[str, str]]]:
+    grouped: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
+    for row in panel_rows:
+        grouped[(row["operation_id"], row["event_type"])].append(row)
+    return grouped
+
+
+def _diagnostic_rows(panel_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    rows_out: list[dict[str, str]] = []
+    for (_operation_id, _event_type), rows in sorted(_grouped_panel(panel_rows).items()):
+        targeted = [row for row in rows if row.get("targeted_bucket") == "1"]
+        controls = [row for row in rows if row.get("targeted_bucket") == "0"]
+        if not targeted:
+            continue
+        first = targeted[0]
+        target_trace_change = _change(targeted, "trace_turnover")
+        control_changes = [
+            value
+            for bucket in sorted({row["comparison_maturity_bucket"] for row in controls})
+            if (
+                value := _change(
+                    [row for row in controls if row["comparison_maturity_bucket"] == bucket],
+                    "trace_turnover",
+                )
+            )
+            is not None
+        ]
+        control_trace_change = _mean(control_changes)
+        pretrend_trace = _pretrend_change(targeted, "trace_turnover")
+        target_net_position_change = _change(targeted, "net_positions_usd_millions")
+        control_net_changes = [
+            value
+            for bucket in sorted({row["comparison_maturity_bucket"] for row in controls})
+            if (
+                value := _change(
+                    [row for row in controls if row["comparison_maturity_bucket"] == bucket],
+                    "net_positions_usd_millions",
+                )
+            )
+            is not None
+        ]
+        control_net_change = _mean(control_net_changes)
+        trace_rows = _nonmissing_count(rows, "trace_turnover")
+        dealer_rows = _nonmissing_count(rows, "net_positions_usd_millions")
+        fails_rows = _nonmissing_count(rows, "dealer_fails_total_usd_millions")
+        pretrend_warning = (
+            "1"
+            if pretrend_trace is not None
+            and target_trace_change is not None
+            and abs(pretrend_trace) >= max(abs(target_trace_change), 1e-12) * 0.5
+            else "0"
+        )
+        if target_trace_change is None:
+            trace_status = "no_target_trace"
+        elif control_trace_change is None:
+            trace_status = "target_only_no_control_trace"
+        elif pretrend_warning == "1":
+            trace_status = "pretrend_warning"
+        else:
+            trace_status = "diagnostic_ready"
+        rows_out.append(
+            {
+                "operation_id": first["operation_id"],
+                "event_type": first["event_type"],
+                "target_maturity_bucket": first["target_maturity_bucket"],
+                "accepted_amount_usd_millions": first.get("accepted_amount_usd_millions", ""),
+                "buyback_intensity": first.get("buyback_intensity", ""),
+                "targeted_post_minus_pre_trace_turnover": format_number(target_trace_change),
+                "control_post_minus_pre_trace_turnover_mean": format_number(control_trace_change),
+                "targeted_minus_control_trace_turnover_change": format_number(
+                    None
+                    if target_trace_change is None or control_trace_change is None
+                    else target_trace_change - control_trace_change
+                ),
+                "targeted_pretrend_trace_turnover_change": format_number(pretrend_trace),
+                "targeted_post_minus_pre_net_position": format_number(target_net_position_change),
+                "control_post_minus_pre_net_position_mean": format_number(control_net_change),
+                "targeted_minus_control_net_position_change": format_number(
+                    None
+                    if target_net_position_change is None or control_net_change is None
+                    else target_net_position_change - control_net_change
+                ),
+                "pretrend_warning": pretrend_warning,
+                "trace_diagnostic_status": trace_status,
+                "coverage_status": _status_from_coverage(trace_rows, dealer_rows, fails_rows),
+            }
+        )
+    return rows_out
+
+
+def _coverage_rows(panel_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    rows_out: list[dict[str, str]] = []
+    for (_operation_id, _event_type), rows in sorted(_grouped_panel(panel_rows).items()):
+        targeted = [row for row in rows if row.get("targeted_bucket") == "1"]
+        if not targeted:
+            continue
+        first = targeted[0]
+        trace_rows = _nonmissing_count(rows, "trace_turnover")
+        dealer_position_rows = _nonmissing_count(rows, "net_positions_usd_millions")
+        dealer_fails_rows = _nonmissing_count(rows, "dealer_fails_total_usd_millions")
+        rows_out.append(
+            {
+                "operation_id": first["operation_id"],
+                "event_type": first["event_type"],
+                "target_maturity_bucket": first["target_maturity_bucket"],
+                "event_window_rows": str(len(rows)),
+                "targeted_rows": str(len(targeted)),
+                "control_rows": str(len(rows) - len(targeted)),
+                "trace_rows": str(trace_rows),
+                "dealer_position_rows": str(dealer_position_rows),
+                "dealer_fails_rows": str(dealer_fails_rows),
+                "coverage_status": _status_from_coverage(
+                    trace_rows,
+                    dealer_position_rows,
+                    dealer_fails_rows,
+                ),
+            }
+        )
+    return rows_out
+
+
+def _announcement_operation_rows(summary_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    targeted = [row for row in summary_rows if row.get("targeted_bucket") == "1"]
+    index = {(row["operation_id"], row["event_type"]): row for row in targeted}
+    operation_ids = sorted({row["operation_id"] for row in targeted})
+    rows_out: list[dict[str, str]] = []
+    for operation_id in operation_ids:
+        announcement = index.get((operation_id, "announcement"))
+        operation = index.get((operation_id, "operation"))
+        if not announcement and not operation:
+            continue
+        base = announcement or operation or {}
+        announcement_trace = as_float(
+            announcement.get("post_minus_pre_trace_turnover") if announcement else "",
+            default=float("nan"),
+        )
+        operation_trace = as_float(
+            operation.get("post_minus_pre_trace_turnover") if operation else "",
+            default=float("nan"),
+        )
+        announcement_net = as_float(
+            announcement.get("post_minus_pre_net_position") if announcement else "",
+            default=float("nan"),
+        )
+        operation_net = as_float(
+            operation.get("post_minus_pre_net_position") if operation else "",
+            default=float("nan"),
+        )
+        rows_out.append(
+            {
+                "operation_id": operation_id,
+                "target_maturity_bucket": base.get("target_maturity_bucket", ""),
+                "accepted_amount_usd_millions": base.get("accepted_amount_usd_millions", ""),
+                "buyback_intensity": base.get("buyback_intensity", ""),
+                "announcement_trace_change": format_number(
+                    None if announcement_trace != announcement_trace else announcement_trace
+                ),
+                "operation_trace_change": format_number(
+                    None if operation_trace != operation_trace else operation_trace
+                ),
+                "operation_minus_announcement_trace_change": format_number(
+                    None
+                    if announcement_trace != announcement_trace
+                    or operation_trace != operation_trace
+                    else operation_trace - announcement_trace
+                ),
+                "announcement_net_position_change": format_number(
+                    None if announcement_net != announcement_net else announcement_net
+                ),
+                "operation_net_position_change": format_number(
+                    None if operation_net != operation_net else operation_net
+                ),
+                "operation_minus_announcement_net_position_change": format_number(
+                    None
+                    if announcement_net != announcement_net or operation_net != operation_net
+                    else operation_net - announcement_net
+                ),
+            }
+        )
+    return rows_out
+
+
+def _claim_status(
+    diagnostic: Mapping[str, str],
+    targeted_summary: Mapping[str, str] | None,
+) -> str:
+    if diagnostic.get("coverage_status") == "no_proxy_rows":
+        return "coverage_limited"
+    if diagnostic.get("trace_diagnostic_status") != "diagnostic_ready":
+        return "coverage_limited"
+    trace_change = as_float(
+        diagnostic.get("targeted_minus_control_trace_turnover_change"),
+        default=float("nan"),
+    )
+    fails_change = as_float(
+        targeted_summary.get("post_minus_pre_fails") if targeted_summary else "",
+        default=float("nan"),
+    )
+    net_position_change = as_float(
+        diagnostic.get("targeted_minus_control_net_position_change"),
+        default=float("nan"),
+    )
+    supportive = trace_change == trace_change and trace_change > 0
+    adverse_fails = fails_change == fails_change and fails_change > 0
+    easing_fails = fails_change == fails_change and fails_change < 0
+    dealer_absorption_down = net_position_change == net_position_change and net_position_change < 0
+    if supportive and (easing_fails or dealer_absorption_down):
+        return "supportive_diagnostic"
+    if supportive or easing_fails or dealer_absorption_down:
+        return "mixed_diagnostic"
+    if adverse_fails or (trace_change == trace_change and trace_change < 0):
+        return "mixed_diagnostic"
+    return "no_visible_signal"
+
+
+def _results_triage_rows(
+    diagnostic_rows: list[dict[str, str]],
+    summary_rows: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    targeted_summary = {
+        (row["operation_id"], row["event_type"]): row
+        for row in summary_rows
+        if row.get("targeted_bucket") == "1"
+    }
+    rows_out: list[dict[str, str]] = []
+    for diagnostic in diagnostic_rows:
+        key = (diagnostic["operation_id"], diagnostic["event_type"])
+        summary = targeted_summary.get(key)
+        trace_change = as_float(
+            diagnostic.get("targeted_minus_control_trace_turnover_change"),
+            default=0.0,
+        )
+        fails_change = as_float(
+            summary.get("post_minus_pre_fails") if summary else "",
+            default=0.0,
+        )
+        net_position_change = as_float(
+            diagnostic.get("targeted_minus_control_net_position_change"),
+            default=0.0,
+        )
+        intensity = as_float(diagnostic.get("buyback_intensity"), default=0.0)
+        signal_score = (
+            abs(trace_change)
+            + abs(fails_change) / 1_000_000
+            + abs(net_position_change) / 100_000
+        )
+        rows_out.append(
+            {
+                "operation_id": diagnostic["operation_id"],
+                "event_type": diagnostic["event_type"],
+                "target_maturity_bucket": diagnostic["target_maturity_bucket"],
+                "claim_status": _claim_status(diagnostic, summary),
+                "triage_rank": "",
+                "signal_score": format_number(signal_score),
+                "targeted_minus_control_trace_turnover_change": diagnostic.get(
+                    "targeted_minus_control_trace_turnover_change",
+                    "",
+                ),
+                "targeted_pretrend_trace_turnover_change": diagnostic.get(
+                    "targeted_pretrend_trace_turnover_change",
+                    "",
+                ),
+                "post_minus_pre_fails": summary.get("post_minus_pre_fails", "") if summary else "",
+                "post_minus_pre_net_position": (
+                    summary.get("post_minus_pre_net_position", "") if summary else ""
+                ),
+                "targeted_minus_control_net_position_change": diagnostic.get(
+                    "targeted_minus_control_net_position_change",
+                    "",
+                ),
+                "buyback_intensity": format_number(intensity) if intensity else "",
+                "accepted_amount_usd_millions": diagnostic.get(
+                    "accepted_amount_usd_millions",
+                    "",
+                ),
+                "coverage_status": diagnostic.get("coverage_status", ""),
+                "trace_diagnostic_status": diagnostic.get("trace_diagnostic_status", ""),
+            }
+        )
+    status_priority = {
+        "supportive_diagnostic": 3,
+        "mixed_diagnostic": 2,
+        "no_visible_signal": 1,
+        "coverage_limited": 0,
+    }
+    rows_out.sort(
+        key=lambda row: (
+            status_priority.get(row["claim_status"], 0),
+            as_float(row["signal_score"]),
+        ),
+        reverse=True,
+    )
+    for rank, row in enumerate(rows_out, start=1):
+        row["triage_rank"] = str(rank)
+    return rows_out
 
 
 def build_offrun_panel(
@@ -430,6 +818,10 @@ def build_offrun_panel(
     liquidity_file = _output_path(config, "liquidity_context_panel", liquidity_context_path)
     panel_output = _output_path(config, "offrun_panel", output_path)
     summary_file = _output_path(config, "buyback_event_summary", summary_output)
+    diagnostics_file = config.path("event_diagnostics")
+    results_triage_file = config.path("results_triage")
+    coverage_file = config.path("coverage_qa")
+    announcement_operation_file = config.path("announcement_operation_summary")
 
     if not buyback_file.exists():
         raise OffrunError(f"Buyback operations panel missing: {buyback_file}")
@@ -445,7 +837,8 @@ def build_offrun_panel(
                 event_row,
                 target_bucket,
                 True,
-                context.get((window_date, target_bucket)),
+                context.get((window_date, target_bucket))
+                or context.get((month_key(window_date), target_bucket)),
             )
         )
         for control_bucket in _nearby_control_buckets(config, target_bucket):
@@ -454,7 +847,8 @@ def build_offrun_panel(
                     event_row,
                     control_bucket,
                     False,
-                    context.get((window_date, control_bucket)),
+                    context.get((window_date, control_bucket))
+                    or context.get((month_key(window_date), control_bucket)),
                 )
             )
 
@@ -463,12 +857,61 @@ def build_offrun_panel(
         "security_type",
         "offered_amount_usd_millions",
         "acceptance_ratio",
+        "sibling_outstanding_usd_millions",
+        "sibling_liquidity_weight",
         "trading_volume_usd_millions",
         "net_positions_usd_millions",
         "financing_usd_millions",
         "liquidity_proxy_count",
     ]
-    summary_fields = _schema_fields(config, "buyback_event_summary") + ["event_window_rows"]
+    summary_rows = _summary_rows(panel_rows)
+    summary_fields = _schema_fields(config, "buyback_event_summary") + [
+        "accepted_amount_usd_millions",
+        "buyback_intensity",
+        "pre_event_net_position_mean",
+        "post_event_net_position_mean",
+        "post_minus_pre_net_position",
+        "pre_event_financing_mean",
+        "post_event_financing_mean",
+        "post_minus_pre_financing",
+        "trace_rows",
+        "dealer_position_rows",
+        "dealer_fails_rows",
+        "event_window_rows",
+    ]
+    diagnostic_fields = _schema_fields(config, "event_diagnostics") + [
+        "accepted_amount_usd_millions",
+        "buyback_intensity",
+        "targeted_post_minus_pre_net_position",
+        "control_post_minus_pre_net_position_mean",
+        "targeted_minus_control_net_position_change",
+        "coverage_status",
+    ]
+    triage_fields = _schema_fields(config, "results_triage") + [
+        "targeted_pretrend_trace_turnover_change",
+        "targeted_minus_control_net_position_change",
+        "accepted_amount_usd_millions",
+        "trace_diagnostic_status",
+    ]
+    coverage_fields = _schema_fields(config, "coverage_qa")
+    announcement_operation_fields = _schema_fields(config, "announcement_operation_summary") + [
+        "accepted_amount_usd_millions",
+        "buyback_intensity",
+        "operation_minus_announcement_net_position_change",
+    ]
     write_csv(panel_output, panel_rows, panel_fields)
-    write_csv(summary_file, _summary_rows(panel_rows), summary_fields)
+    write_csv(summary_file, summary_rows, summary_fields)
+    diagnostic_rows = _diagnostic_rows(panel_rows)
+    write_csv(diagnostics_file, diagnostic_rows, diagnostic_fields)
+    write_csv(
+        results_triage_file,
+        _results_triage_rows(diagnostic_rows, summary_rows),
+        triage_fields,
+    )
+    write_csv(coverage_file, _coverage_rows(panel_rows), coverage_fields)
+    write_csv(
+        announcement_operation_file,
+        _announcement_operation_rows(summary_rows),
+        announcement_operation_fields,
+    )
     return panel_output, summary_file

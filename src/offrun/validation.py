@@ -75,8 +75,13 @@ def validate_offrun_package(
         "liquidity_context_panel",
         "offrun_panel",
         "buyback_event_summary",
+        "event_diagnostics",
+        "results_triage",
+        "coverage_qa",
+        "announcement_operation_summary",
         "source_inventory",
         "report",
+        "findings_report",
         "buyback_timeline_figure",
         "targeted_bucket_figure",
         "manifest",
@@ -90,6 +95,10 @@ def validate_offrun_package(
         "liquidity_context_panel",
         "offrun_panel",
         "buyback_event_summary",
+        "event_diagnostics",
+        "results_triage",
+        "coverage_qa",
+        "announcement_operation_summary",
     ):
         _validate_csv_rows(config.path(key), failures)
 
@@ -101,6 +110,10 @@ def validate_offrun_package(
             ("liquidity_context_panel", "liquidity_context_panel"),
             ("offrun_panel", "offrun_panel"),
             ("buyback_event_summary", "buyback_event_summary"),
+            ("event_diagnostics", "event_diagnostics"),
+            ("results_triage", "results_triage"),
+            ("coverage_qa", "coverage_qa"),
+            ("announcement_operation_summary", "announcement_operation_summary"),
         ):
             payload = datasets.get(dataset, {})
             if isinstance(payload, Mapping):
@@ -110,6 +123,9 @@ def validate_offrun_package(
     report_path = config.path("report")
     if report_path.exists():
         failures.extend(validate_claim_language(read_text(report_path), config.project))
+    findings_path = config.path("findings_report")
+    if findings_path.exists():
+        failures.extend(validate_claim_language(read_text(findings_path), config.project))
 
     if strict and failures:
         raise ValidationError("Package validation failed: " + "; ".join(failures))

@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from .config import load_config
-from .io import OffrunError, as_float, read_csv, write_csv, write_text
+from .io import OffrunError, as_float, format_number, read_csv, write_csv, write_text
 
 
 def _source_inventory_fallback(repo_root: Path, output_path: Path) -> None:
@@ -63,7 +63,7 @@ def _source_inventory_fallback(repo_root: Path, output_path: Path) -> None:
     write_csv(output_path, rows, fieldnames)
 
 
-def _write_timeline_svg(rows: list[dict[str, str]], output_path: Path) -> None:
+def _write_timeline_svg(rows: list[dict[str, str]], output_path: Path, *, fixture: bool) -> None:
     """Write a small SVG timeline without external plotting dependencies."""
 
     if not rows:
@@ -75,7 +75,7 @@ def _write_timeline_svg(rows: list[dict[str, str]], output_path: Path) -> None:
         f'viewBox="0 0 760 {height}">',
         '<rect width="760" height="100%" fill="white"/>',
         '<text x="20" y="28" font-size="16" font-family="sans-serif">'
-        "Synthetic buyback operation timeline</text>",
+        f"{'Synthetic' if fixture else 'Treasury'} buyback operation timeline</text>",
     ]
     max_accepted = max(as_float(row.get("accepted_amount_usd_millions")) for row in rows) or 1.0
     for index, row in enumerate(rows):
@@ -143,6 +143,110 @@ def _write_event_svg(rows: list[dict[str, str]], output_path: Path) -> None:
     write_text(output_path, "\n".join(lines) + "\n")
 
 
+def _status_counts(rows: list[dict[str, str]], field: str) -> dict[str, int]:
+    counts: dict[str, int] = defaultdict(int)
+    for row in rows:
+        counts[row.get(field, "") or "missing"] += 1
+    return dict(sorted(counts.items()))
+
+
+def _format_counts(counts: dict[str, int]) -> str:
+    return ", ".join(f"{key}: {value}" for key, value in counts.items()) or "none"
+
+
+def _top_rows(rows: list[dict[str, str]], count: int = 8) -> list[dict[str, str]]:
+    return sorted(rows, key=lambda row: as_float(row.get("triage_rank")))[:count]
+
+
+def _markdown_table(rows: list[dict[str, str]], fields: list[str]) -> str:
+    if not rows:
+        return "No rows available.\n"
+    header = "| " + " | ".join(fields) + " |"
+    divider = "| " + " | ".join("---" for _ in fields) + " |"
+    body = []
+    for row in rows:
+        body.append("| " + " | ".join(str(row.get(field, "")) for field in fields) + " |")
+    return "\n".join([header, divider, *body]) + "\n"
+
+
+def _write_findings_report(
+    output_path: Path,
+    *,
+    operation_rows: list[dict[str, str]],
+    triage_rows: list[dict[str, str]],
+    coverage_rows: list[dict[str, str]],
+    diagnostics_rows: list[dict[str, str]],
+) -> None:
+    claim_counts = _status_counts(triage_rows, "claim_status")
+    coverage_counts = _status_counts(coverage_rows, "coverage_status")
+    diagnostic_counts = _status_counts(diagnostics_rows, "trace_diagnostic_status")
+    completed_operations = len({row.get("operation_id", "") for row in operation_rows})
+    diagnostic_ready = sum(
+        1 for row in diagnostics_rows if row.get("trace_diagnostic_status") == "diagnostic_ready"
+    )
+    supportive = [row for row in triage_rows if row.get("claim_status") == "supportive_diagnostic"]
+    mixed = [row for row in triage_rows if row.get("claim_status") == "mixed_diagnostic"]
+    avg_intensity_values = [
+        as_float(row.get("buyback_intensity"))
+        for row in triage_rows
+        if row.get("buyback_intensity")
+    ]
+    avg_intensity = (
+        sum(avg_intensity_values) / len(avg_intensity_values) if avg_intensity_values else None
+    )
+
+    top_table = _markdown_table(
+        _top_rows(triage_rows),
+        [
+            "triage_rank",
+            "operation_id",
+            "event_type",
+            "target_maturity_bucket",
+            "claim_status",
+            "signal_score",
+            "targeted_minus_control_trace_turnover_change",
+            "post_minus_pre_fails",
+            "buyback_intensity",
+            "coverage_status",
+        ],
+    )
+    text = f"""# offrun findings report
+
+This report summarizes **descriptive market-liquidity evidence** from the current
+real-source build. It is a diagnostic screen, not a causal estimate.
+
+## Readout
+
+- Completed buyback operations: {completed_operations}
+- Event diagnostics with targeted-versus-control TRACE support: {diagnostic_ready}
+- Claim-status counts: {_format_counts(claim_counts)}
+- Coverage-status counts: {_format_counts(coverage_counts)}
+- TRACE diagnostic-status counts: {_format_counts(diagnostic_counts)}
+- Supportive diagnostic rows: {len(supportive)}
+- Mixed diagnostic rows: {len(mixed)}
+- Average available buyback intensity: {format_number(avg_intensity)}
+
+## Top diagnostic rows
+
+{top_table}
+## Interpretation
+
+`supportive_diagnostic` means the row has a positive targeted-minus-control TRACE
+turnover change and either lower fails or lower relative dealer net positions in
+the same descriptive window. `mixed_diagnostic` means one proxy moves in a
+potentially supportive direction while another is unavailable or points the
+other way. `coverage_limited` means the source support is too thin for that row
+to carry interpretive weight.
+
+The TRACE proxy is broad public aggregate turnover repeated across analysis
+buckets for event-window alignment. Dealer financing and fails are aggregate
+Treasury/TIPS diagnostics. These outputs should therefore be read as market
+functioning screens around Treasury buybacks, not as CUSIP-level liquidity
+evidence or causal pass-through estimates.
+"""
+    write_text(output_path, text)
+
+
 def write_offrun_report(
     repo_root: Path | str | None = None,
     *,
@@ -168,29 +272,89 @@ def write_offrun_report(
     panel_rows = read_csv(panel_file)
     summary_rows = read_csv(summary_file)
     operation_rows = read_csv(config.path("buyback_operations"))
+    diagnostics_rows = read_csv(config.path("event_diagnostics"))
+    triage_rows = read_csv(config.path("results_triage"))
+    coverage_rows = read_csv(config.path("coverage_qa"))
+    announcement_operation_rows = read_csv(config.path("announcement_operation_summary"))
     if not panel_rows:
         raise OffrunError("Cannot write report from an empty offrun panel")
+    fixture_build = all(
+        row.get("source_family", "").startswith("fixture") for row in operation_rows
+    )
 
     source_inventory = tables / "source_inventory.csv"
     if not source_inventory.exists():
         _source_inventory_fallback(config.repo_root, source_inventory)
 
-    _write_timeline_svg(operation_rows, figures / "buyback_timeline.svg")
+    _write_timeline_svg(operation_rows, figures / "buyback_timeline.svg", fixture=fixture_build)
     _write_event_svg(summary_rows, figures / "targeted_bucket_event_windows.svg")
+    _write_findings_report(
+        config.path("findings_report"),
+        operation_rows=operation_rows,
+        triage_rows=triage_rows,
+        coverage_rows=coverage_rows,
+        diagnostics_rows=diagnostics_rows,
+    )
 
     operation_count = len({row.get("operation_id", "") for row in operation_rows})
     panel_count = len(panel_rows)
     targeted_count = sum(1 for row in panel_rows if row.get("targeted_bucket") == "1")
     control_count = panel_count - targeted_count
     non_missing_trace = sum(1 for row in panel_rows if row.get("trace_turnover"))
+    non_missing_dealer_position = sum(
+        1 for row in panel_rows if row.get("net_positions_usd_millions")
+    )
     non_missing_fails = sum(1 for row in panel_rows if row.get("dealer_fails_total_usd_millions"))
+    diagnostic_ready = sum(
+        1 for row in diagnostics_rows if row.get("trace_diagnostic_status") == "diagnostic_ready"
+    )
+    pretrend_warnings = sum(1 for row in diagnostics_rows if row.get("pretrend_warning") == "1")
+    supportive_rows = sum(
+        1 for row in triage_rows if row.get("claim_status") == "supportive_diagnostic"
+    )
+    mixed_rows = sum(1 for row in triage_rows if row.get("claim_status") == "mixed_diagnostic")
+    trace_dealer_coverage = sum(
+        1
+        for row in coverage_rows
+        if row.get("coverage_status") in {"trace_dealer_position", "trace_dealer_fails"}
+    )
+    compared_event_types = sum(
+        1
+        for row in announcement_operation_rows
+        if row.get("announcement_trace_change") and row.get("operation_trace_change")
+    )
+
+    package_label = "fixture-backed smoke package" if fixture_build else "real-source package"
+    build_note = (
+        "synthetic; it is intended to verify source contracts, panel joins, claim-boundary "
+        "checks, and report wiring before any real raw data are added"
+        if fixture_build
+        else "based on local public-source and sibling-project inputs. TRACE rows are broad "
+        "public aggregate proxies and dealer rows are aggregate Primary Dealer Statistics context"
+    )
+
+    fixture_note = (
+        """## Fixture note
+
+The included fixtures are intentionally tiny. They are not evidence about real
+Treasury markets; they only exercise the offrun code paths and validation gates.
+"""
+        if fixture_build
+        else """## Source note
+
+The real build uses ignored local raw/imported data plus sibling outputs. TRACE
+turnover is a broad public aggregate proxy repeated across analysis buckets for
+event-window alignment; it is not maturity-bucket or CUSIP-level liquidity.
+Dealer context uses bucket-mapped aggregate primary-dealer net positions plus
+aggregate Treasury financing and fails series repeated across analysis buckets.
+"""
+    )
 
     text = f"""# offrun accounting report
 
-This fixture-backed starter package provides **descriptive market-liquidity evidence**
+This {package_label} provides **descriptive market-liquidity evidence**
 around Treasury buyback announcement and operation windows. The current build is
-synthetic and is intended to verify source contracts, panel joins, claim-boundary
-checks, and report wiring before any real raw data are added.
+{build_note}.
 
 ## Package summary
 
@@ -199,7 +363,26 @@ checks, and report wiring before any real raw data are added.
 - Targeted-bucket rows: {targeted_count}
 - Nearby-control rows: {control_count}
 - Rows with TRACE aggregate turnover proxy: {non_missing_trace}
+- Rows with dealer net-position diagnostic: {non_missing_dealer_position}
 - Rows with dealer fails diagnostic: {non_missing_fails}
+- Event diagnostics ready for targeted-versus-control TRACE review: {diagnostic_ready}
+- Event diagnostics with pretrend warnings: {pretrend_warnings}
+- Event windows with both TRACE and dealer-position coverage: {trace_dealer_coverage}
+- Operation/event pairs with both announcement and operation TRACE changes: {compared_event_types}
+- Supportive diagnostic rows: {supportive_rows}
+- Mixed diagnostic rows: {mixed_rows}
+
+## Diagnostic surfaces
+
+- `output/tables/coverage_qa.csv` reports proxy coverage by operation and event type.
+- `output/tables/event_diagnostics.csv` reports targeted-bucket changes, nearby-control
+  changes, targeted-minus-control differences, and pretrend warnings.
+- `output/tables/results_triage.csv` ranks diagnostic rows and assigns descriptive
+  claim-status labels.
+- `output/tables/announcement_operation_summary.csv` compares announcement-window and
+  operation-window changes for each completed buyback operation.
+- Buyback intensity is accepted amount scaled by sibling outstanding stock when the
+  `tdcladder` denominator is available.
 
 ## Interpretation boundary
 
@@ -217,14 +400,16 @@ comparisons.
 
 - `data/derived/offrun_panel.csv`
 - `output/tables/buyback_event_summary.csv`
+- `output/tables/event_diagnostics.csv`
+- `output/tables/results_triage.csv`
+- `output/tables/coverage_qa.csv`
+- `output/tables/announcement_operation_summary.csv`
 - `output/tables/source_inventory.csv`
 - `output/figures/buyback_timeline.svg`
 - `output/figures/targeted_bucket_event_windows.svg`
+- `output/reports/offrun_findings_report.md`
 
-## Fixture note
-
-The included fixtures are intentionally tiny. They are not evidence about real
-Treasury markets; they only exercise the offrun code paths and validation gates.
+{fixture_note}
 """
     write_text(report_file, text)
     return report_file

@@ -120,8 +120,13 @@ def validate_config(repo_root: Path | str | None = None) -> list[str]:
         "liquidity_context_panel",
         "offrun_panel",
         "buyback_event_summary",
+        "event_diagnostics",
+        "results_triage",
+        "coverage_qa",
+        "announcement_operation_summary",
         "source_inventory",
         "report",
+        "findings_report",
         "buyback_timeline_figure",
         "targeted_bucket_figure",
         "manifest",
@@ -197,6 +202,10 @@ def validate_config(repo_root: Path | str | None = None) -> list[str]:
         "liquidity_context_panel",
         "offrun_panel",
         "buyback_event_summary",
+        "event_diagnostics",
+        "results_triage",
+        "coverage_qa",
+        "announcement_operation_summary",
     ):
         dataset_payload = _require_mapping(datasets, dataset, "schemas.yml datasets")
         _require_sequence(dataset_payload, "required_columns", f"schemas.yml {dataset}")

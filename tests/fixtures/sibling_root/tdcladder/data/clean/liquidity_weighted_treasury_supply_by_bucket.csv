@@ -1,0 +1,5 @@
+month,security_type,maturity_bucket,supply_basis,treasury_supply_raw,liquid_treasury_supply,weight_family,liquidity_weight
+2024-04-01,Note,3_5y,outstanding_stock,720000000000,446400000000,fixed_baseline,0.62
+2024-04-01,Note,7_10y,outstanding_stock,650000000000,312000000000,fixed_baseline,0.48
+2024-04-01,Bond,10_20y,outstanding_stock,500000000000,155000000000,fixed_baseline,0.31
+2024-04-01,Bond,20_30y,outstanding_stock,420000000000,75600000000,fixed_baseline,0.18

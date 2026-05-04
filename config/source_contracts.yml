@@ -3,43 +3,72 @@ sibling_sources:
     required: true
     role: maturity and liquidity ladder context; TRACE turnover precedents
     artifacts:
-      - name: monthly_ladder_panel
-        source_path: data/clean/monthly_ladder_panel.csv
-        import_path: data/imported/tdcladder/monthly_ladder_panel.csv
+      - name: liquidity_weighted_treasury_supply_by_bucket
+        source_path: data/clean/liquidity_weighted_treasury_supply_by_bucket.csv
+        import_path: data/imported/tdcladder/source_liquidity_weighted_treasury_supply_by_bucket.csv
         required: true
         required_columns:
-          - date
+          - month
           - maturity_bucket
-          - outstanding_usd_millions
+          - supply_basis
+          - treasury_supply_raw
           - liquidity_weight
+          - liquid_treasury_supply
+      - name: trace_turnover_by_maturity
+        source_path: data/raw/market_liquidity/turnover_by_maturity.csv
+        import_path: data/imported/tdcladder/source_trace_turnover_by_maturity.csv
+        required: true
+        required_columns:
+          - month
+          - security_type
+          - trace_volume
+          - outstanding_amount
+          - turnover
   buycurve:
     required: true
     role: Treasury issuance composition and maturity context
     artifacts:
-      - name: monthly_issuance_maturity_context
-        source_path: output/tables/monthly_issuance_maturity_context.csv
-        import_path: data/imported/buycurve/monthly_issuance_maturity_context.csv
+      - name: monthly_issuance_maturity_panel
+        source_path: data/clean/monthly_issuance_maturity_panel.csv
+        import_path: data/imported/buycurve/source_monthly_issuance_maturity_panel.csv
         required: true
         required_columns:
-          - date
+          - month
+          - security_type
           - maturity_bucket
-          - gross_issuance_usd_millions
-          - bill_share
-          - wam_months
+          - accepted_amount_sum
+          - weighted_maturity_years
+      - name: primary_dealer_context_clean
+        source_path: data/interim/primary_dealer_context_clean.csv
+        import_path: data/imported/buycurve/source_primary_dealer_context_clean.csv
+        required: true
+        required_columns:
+          - as_of_date
+          - measure
+          - remaining_maturity_bucket
+          - value
+      - name: primary_dealer_timeseries
+        source_path: data/raw/validation/primary_dealer/pd_timeseries.csv
+        import_path: data/imported/buycurve/source_primary_dealer_timeseries.csv
+        required: true
+        required_columns:
+          - As Of Date
+          - Time Series
+          - Value (millions)
   liqsub:
     required: true
     role: liquidity-plumbing diagnostics for interpretation sidecars
     artifacts:
-      - name: monthly_liquidity_plumbing
-        source_path: output/tables/monthly_liquidity_plumbing.csv
-        import_path: data/imported/liqsub/monthly_liquidity_plumbing.csv
+      - name: monthly_liquidity_substitution_panel
+        source_path: data/clean/monthly_liquidity_substitution_panel.csv
+        import_path: data/imported/liqsub/source_monthly_liquidity_substitution_panel.csv
         required: true
         required_columns:
-          - date
-          - tga_usd_millions
-          - reserves_usd_millions
-          - mmf_assets_usd_millions
-          - on_rrp_usd_millions
+          - month
+          - tga
+          - reserves
+          - total_mmf_assets
+          - on_rrp
   rowflow:
     required: false
     role: optional rest-of-world Treasury absorption context only if useful
@@ -49,9 +78,9 @@ sibling_sources:
         import_path: data/imported/rowflow/rowflow_panel.csv
         required: false
         required_columns:
-          - date
-          - foreign_official_flow_usd_millions
-          - foreign_private_flow_usd_millions
+          - month
+          - tic_foreign_official_treasury_net_flow_usd_millions
+          - tic_foreign_private_treasury_net_flow_usd_millions
 
 public_sources:
   treasury_buybacks_fiscaldata:

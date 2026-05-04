@@ -1,0 +1,3 @@
+month,security_type,trace_volume,trace_trade_count,source_granularity,outstanding_amount,turnover,maturity_bucket,source_detail
+2024-04-01,Coupon,6500000000000,0,weekly,12000000000000,0.541667,all,fixture public aggregate
+2024-04-01,TIPS,300000000000,0,weekly,1800000000000,0.166667,all,fixture public aggregate

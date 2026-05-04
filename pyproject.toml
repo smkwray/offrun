@@ -9,7 +9,7 @@ description = "Bounded Treasury buybacks and off-the-run liquidity evidence pack
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
-authors = [{name = "Treasury Deposit Channel project family"}]
+authors = [{name = "Shane Wray"}]
 dependencies = ["PyYAML>=6.0"]
 
 [project.optional-dependencies]

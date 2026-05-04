@@ -29,7 +29,7 @@ smoke-fixtures:
 real-package:
 	PYTHONPATH=src $(PYTHON) -m offrun validate-config
 	PYTHONPATH=src $(PYTHON) -m offrun validate-sibling-sources --sibling-root $(SIBLING_ROOT) --strict
-	PYTHONPATH=src $(PYTHON) -m offrun copy-sibling-outputs --sibling-root $(SIBLING_ROOT) --overwrite --strict
+	PYTHONPATH=src $(PYTHON) -m offrun prepare-real-inputs --sibling-root $(SIBLING_ROOT) --download-buybacks
 	PYTHONPATH=src $(PYTHON) -m offrun build-buyback-operations-panel
 	PYTHONPATH=src $(PYTHON) -m offrun build-liquidity-context-panel
 	PYTHONPATH=src $(PYTHON) -m offrun build-offrun-panel

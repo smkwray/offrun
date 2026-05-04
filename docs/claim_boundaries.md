@@ -1,6 +1,6 @@
 # claim boundaries
 
-`offrun` is a market-liquidity sidecar for the Treasury Deposit Channel project family. It does not directly estimate TDC and it does not identify domestic deposit pass-through.
+`offrun` is a market-liquidity sidecar for Treasury Deposit Channel (TDC) research. It does not directly estimate TDC and it does not identify domestic deposit pass-through.
 
 ## Allowed language
 
@@ -29,4 +29,4 @@ The package must not claim:
 1. The report must include `descriptive market-liquidity evidence`.
 2. The report must not include forbidden unqualified phrases listed in `config/project.yml`.
 
-The gate is intentionally simple in the starter. Future versions may add richer claim-boundary linting, pre-trend checks, and source-coverage thresholds.
+The gate is intentionally simple. Future versions may add richer claim-boundary linting, pre-trend checks, and source-coverage thresholds.

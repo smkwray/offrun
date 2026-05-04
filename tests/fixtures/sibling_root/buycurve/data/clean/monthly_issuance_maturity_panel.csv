@@ -1,0 +1,5 @@
+month,security_type,maturity_bucket,auction_count,accepted_amount_sum,offering_amount_sum,weighted_maturity_years,bill_share_by_accepted_amount
+2024-04-01,Note,3_5y,3,80000000000,80000000000,5,0
+2024-04-01,Note,7_10y,1,43000000000,43000000000,10,0
+2024-04-01,Bond,10_20y,1,25000000000,25000000000,20,0
+2024-04-01,Bond,20_30y,1,18000000000,18000000000,30,0

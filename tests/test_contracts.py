@@ -25,6 +25,13 @@ def test_copy_fixture_sibling_outputs(temp_repo):
     )
 
     assert copied
-    assert (temp_repo / "data/imported/tdcladder/monthly_ladder_panel.csv").exists()
-    assert (temp_repo / "data/imported/buycurve/monthly_issuance_maturity_context.csv").exists()
-    assert (temp_repo / "data/imported/liqsub/monthly_liquidity_plumbing.csv").exists()
+    assert (
+        temp_repo
+        / "data/imported/tdcladder/source_liquidity_weighted_treasury_supply_by_bucket.csv"
+    ).exists()
+    assert (
+        temp_repo / "data/imported/buycurve/source_monthly_issuance_maturity_panel.csv"
+    ).exists()
+    assert (
+        temp_repo / "data/imported/liqsub/source_monthly_liquidity_substitution_panel.csv"
+    ).exists()

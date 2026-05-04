@@ -76,6 +76,7 @@ datasets:
       - comparison_maturity_bucket
       - targeted_bucket
       - accepted_amount_usd_millions
+      - buyback_intensity
       - trace_turnover
       - dealer_fails_total_usd_millions
   buyback_event_summary:
@@ -96,3 +97,61 @@ datasets:
       - pre_event_fails_mean
       - post_event_fails_mean
       - post_minus_pre_fails
+  event_diagnostics:
+    primary_key:
+      - operation_id
+      - event_type
+    required_columns:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+      - targeted_post_minus_pre_trace_turnover
+      - control_post_minus_pre_trace_turnover_mean
+      - targeted_minus_control_trace_turnover_change
+      - targeted_pretrend_trace_turnover_change
+      - pretrend_warning
+      - trace_diagnostic_status
+  coverage_qa:
+    primary_key:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+    required_columns:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+      - event_window_rows
+      - targeted_rows
+      - control_rows
+      - trace_rows
+      - dealer_position_rows
+      - dealer_fails_rows
+      - coverage_status
+  results_triage:
+    primary_key:
+      - operation_id
+      - event_type
+    required_columns:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+      - claim_status
+      - triage_rank
+      - signal_score
+      - targeted_minus_control_trace_turnover_change
+      - post_minus_pre_fails
+      - post_minus_pre_net_position
+      - buyback_intensity
+      - coverage_status
+  announcement_operation_summary:
+    primary_key:
+      - operation_id
+      - target_maturity_bucket
+    required_columns:
+      - operation_id
+      - target_maturity_bucket
+      - announcement_trace_change
+      - operation_trace_change
+      - operation_minus_announcement_trace_change
+      - announcement_net_position_change
+      - operation_net_position_change

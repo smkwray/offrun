@@ -16,6 +16,7 @@ from .panels import (
     build_liquidity_context_panel,
     build_offrun_panel,
 )
+from .real_sources import download_fiscaldata_buybacks, prepare_real_inputs
 from .reports import write_offrun_report
 from .validation import validate_offrun_package
 
@@ -127,6 +128,24 @@ def _cmd_validate_package(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_download_buybacks(args: argparse.Namespace) -> int:
+    path = download_fiscaldata_buybacks(_repo_root(args), output_path=args.output)
+    print(f"wrote {path}")
+    return 0
+
+
+def _cmd_prepare_real_inputs(args: argparse.Namespace) -> int:
+    paths = prepare_real_inputs(
+        _repo_root(args),
+        sibling_root=args.sibling_root,
+        buybacks_input=args.buybacks_input,
+        download_buybacks=args.download_buybacks,
+    )
+    for path in paths:
+        print(f"wrote {path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser."""
 
@@ -192,6 +211,16 @@ def build_parser() -> argparse.ArgumentParser:
     package_parser = subparsers.add_parser("validate-offrun-package")
     package_parser.add_argument("--strict", action="store_true")
     package_parser.set_defaults(func=_cmd_validate_package)
+
+    download_parser = subparsers.add_parser("download-fiscaldata-buybacks")
+    download_parser.add_argument("--output", default=None)
+    download_parser.set_defaults(func=_cmd_download_buybacks)
+
+    real_parser = subparsers.add_parser("prepare-real-inputs")
+    real_parser.add_argument("--sibling-root", default="..")
+    real_parser.add_argument("--buybacks-input", default=None)
+    real_parser.add_argument("--download-buybacks", action="store_true")
+    real_parser.set_defaults(func=_cmd_prepare_real_inputs)
 
     return parser
 

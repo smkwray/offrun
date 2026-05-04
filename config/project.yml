@@ -4,7 +4,7 @@ project:
   version: 0.1.0
   purpose: >-
     Build a bounded Treasury buybacks and off-the-run liquidity evidence package
-    for the Treasury Deposit Channel project family.
+    for Treasury Deposit Channel research.
   core_question: >-
     Can Treasury buyback operations improve off-the-run Treasury liquidity or
     reduce dealer balance-sheet pressure in publicly observable data?
@@ -19,8 +19,13 @@ paths:
   liquidity_context_panel: data/derived/liquidity_context_panel.csv
   offrun_panel: data/derived/offrun_panel.csv
   buyback_event_summary: output/tables/buyback_event_summary.csv
+  event_diagnostics: output/tables/event_diagnostics.csv
+  results_triage: output/tables/results_triage.csv
+  coverage_qa: output/tables/coverage_qa.csv
+  announcement_operation_summary: output/tables/announcement_operation_summary.csv
   source_inventory: output/tables/source_inventory.csv
   report: output/reports/offrun_accounting_report.md
+  findings_report: output/reports/offrun_findings_report.md
   buyback_timeline_figure: output/figures/buyback_timeline.svg
   targeted_bucket_figure: output/figures/targeted_bucket_event_windows.svg
   manifest: output/manifests/offrun_manifest.json

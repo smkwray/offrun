@@ -1,0 +1,4 @@
+as_of_date,month,series_id,measure,dealer_security_type,remaining_maturity_bucket,value,source_file
+2024-04-03,2024-04-01,PDPOSGSC-G3L6,net_position,Nominal coupon,3_6y,22000000000,pd_timeseries.csv
+2024-04-03,2024-04-01,PDPOSGSC-G7L11,net_position,Nominal coupon,7_11y,14000000000,pd_timeseries.csv
+2024-04-03,2024-04-01,PDPOSGSC-G11L21,net_position,Nominal coupon,11_21y,8000000000,pd_timeseries.csv

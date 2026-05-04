@@ -1,10 +1,10 @@
 # offrun design
 
-`offrun` is Project 4 in the Treasury Deposit Channel empirical project family: Treasury buybacks and off-the-run liquidity. It is a sidecar, not a replacement for the core TDC accounting estimator.
+`offrun` is a Treasury buybacks and off-the-run liquidity package for Treasury Deposit Channel (TDC) research. It is a market-functioning sidecar, not a replacement for a core TDC accounting estimator.
 
 ## Research object
 
-Treasury buyback operations create dated interventions in older Treasury securities. The starter treats those interventions as an event-calendar problem:
+Treasury buyback operations create dated interventions in older Treasury securities. The package treats those interventions as an event-calendar problem:
 
 1. normalize buyback operations by announcement date, operation date, security type, maturity bucket, offered amount, accepted amount, and acceptance ratio;
 2. build event windows around announcement and operation dates;
@@ -15,7 +15,11 @@ Treasury buyback operations create dated interventions in older Treasury securit
 
 The default analysis panel is an event-window panel. Each row is a buyback operation, an event type, a window date, and a comparison maturity bucket. Targeted buckets and nearby controls are kept in the same panel with an explicit `targeted_bucket` indicator.
 
-The starter uses daily business-day windows for the fixture panel. Dealer data are often weekly in production, so future real-data builders should preserve the original frequency and avoid implying daily precision when weekly dealer statistics are the source.
+The fixture build uses daily business-day windows. Real TRACE context is monthly
+public aggregate turnover, and real dealer context is weekly aggregate Primary
+Dealer Statistics. The event-window join preserves those sources as aggregate
+context and does not imply daily, CUSIP-level, or maturity-bucket TRACE
+precision.
 
 ## Minimal source pipeline
 
@@ -24,8 +28,8 @@ buyback operations fixture or FiscalData/TreasuryDirect raw extract
   -> data/derived/buyback_operations.csv
   -> data/derived/buyback_event_calendar.csv
 
-public aggregate TRACE fixture/raw extract
-NY Fed Primary Dealer Statistics fixture/raw extract
+public aggregate TRACE fixture/raw extract or [`tdcladder`](https://github.com/smkwray/tdcladder) public aggregate TRACE context
+NY Fed Primary Dealer Statistics fixture/raw extract or [`buycurve`](https://github.com/smkwray/buycurve) cleaned dealer context
 sibling maturity/liquidity context copied into data/imported/
   -> data/derived/trace_liquidity_context.csv
   -> data/derived/dealer_liquidity_context.csv
@@ -43,7 +47,7 @@ For each buyback operation, build event windows around both announcement and ope
 
 ## Design B: targeted versus nearby buckets
 
-The starter includes a conservative comparison-bucket map in `config/variables.yml`. For example, a targeted `7-10y` bucket can be compared with `3-7y` and `10-20y` buckets if the source panel has observable rows for those buckets. These comparisons are credibility checks, not proof of exogeneity.
+The package includes a conservative comparison-bucket map in `config/variables.yml`. For example, a targeted `7-10y` bucket can be compared with `3-7y` and `10-20y` buckets if the source panel has observable rows for those buckets. These comparisons are credibility checks, not proof of exogeneity.
 
 ## Design C: dose response placeholder
 
