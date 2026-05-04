@@ -19,16 +19,23 @@ paths:
   liquidity_context_panel: data/derived/liquidity_context_panel.csv
   offrun_panel: data/derived/offrun_panel.csv
   buyback_event_summary: output/tables/buyback_event_summary.csv
+  buyback_source_reconciliation: output/tables/buyback_source_reconciliation.csv
   event_diagnostics: output/tables/event_diagnostics.csv
   results_triage: output/tables/results_triage.csv
   coverage_qa: output/tables/coverage_qa.csv
   announcement_operation_summary: output/tables/announcement_operation_summary.csv
+  pretrend_diagnostics: output/tables/pretrend_diagnostics.csv
+  placebo_diagnostics: output/tables/placebo_diagnostics.csv
+  dealer_source_granularity_audit: output/tables/dealer_source_granularity_audit.csv
+  evidence_ledger: output/tables/evidence_ledger.csv
   trace_source_granularity_audit: output/tables/trace_source_granularity_audit.csv
   source_inventory: output/tables/source_inventory.csv
   report: output/reports/offrun_accounting_report.md
   findings_report: output/reports/offrun_findings_report.md
   buyback_timeline_figure: output/figures/buyback_timeline.svg
   targeted_bucket_figure: output/figures/targeted_bucket_event_windows.svg
+  evidence_grade_figure: output/figures/evidence_grade_summary.svg
+  source_granularity_figure: output/figures/source_granularity_summary.svg
   manifest: output/manifests/offrun_manifest.json
 
 claim_boundary:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from offrun.io import read_csv
-from offrun.real_sources import prepare_real_inputs
+from offrun.real_sources import normalize_direct_finra_trace_context, prepare_real_inputs
 from offrun.trace_audit import audit_trace_source_granularity
 
 
@@ -38,3 +38,17 @@ def test_audit_trace_source_granularity_records_upgrade_path(temp_repo):
         row for row in rows if row["source_surface"] == "tdcladder reused TRACE turnover"
     )
     assert current["on_off_run_detail"] == "no"
+
+
+def test_normalize_direct_finra_trace_context_preserves_run_granularity(temp_repo):
+    output = normalize_direct_finra_trace_context(
+        temp_repo,
+        input_path=temp_repo / "tests/fixtures/trace/finra_trace_aggregate_fixture.csv",
+    )
+    rows = read_csv(output)
+
+    assert rows[0]["source_family"] == "finra_treasury_aggregate_direct_csv"
+    assert rows[0]["maturity_bucket"] == "3-7y"
+    assert rows[0]["on_off_run"] == "off_the_run"
+    assert rows[0]["trace_source_granularity"] == "finra_aggregate_maturity_on_off_run"
+    assert rows[0]["trace_turnover"] == "0.02"

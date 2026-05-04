@@ -16,10 +16,11 @@ Treasury buyback operations create dated interventions in older Treasury securit
 The default analysis panel is an event-window panel. Each row is a buyback operation, an event type, a window date, and a comparison maturity bucket. Targeted buckets and nearby controls are kept in the same panel with an explicit `targeted_bucket` indicator.
 
 The fixture build uses daily business-day windows. Real TRACE context is monthly
-public aggregate turnover, and real dealer context is weekly aggregate Primary
-Dealer Statistics. The event-window join preserves those sources as aggregate
-context and does not imply daily, CUSIP-level, or maturity-bucket TRACE
-precision.
+public aggregate turnover unless a direct FINRA Treasury aggregate CSV export is
+available locally. Direct FINRA aggregate imports preserve maturity and on/off-run
+fields when present. Real dealer context is weekly aggregate Primary Dealer
+Statistics. The event-window join preserves those sources as aggregate context
+and does not imply CUSIP-level or transaction-level TRACE precision.
 
 ## Minimal source pipeline
 
@@ -38,6 +39,9 @@ sibling maturity/liquidity context copied into data/imported/
 buyback_event_calendar + liquidity_context_panel
   -> data/derived/offrun_panel.csv
   -> output/tables/buyback_event_summary.csv
+  -> output/tables/pretrend_diagnostics.csv
+  -> output/tables/placebo_diagnostics.csv
+  -> output/tables/evidence_ledger.csv
   -> output/reports/offrun_accounting_report.md
 ```
 
@@ -49,9 +53,20 @@ For each buyback operation, build event windows around both announcement and ope
 
 The package includes a conservative comparison-bucket map in `config/variables.yml`. For example, a targeted `7-10y` bucket can be compared with `3-7y` and `10-20y` buckets if the source panel has observable rows for those buckets. These comparisons are credibility checks, not proof of exogeneity.
 
-## Design C: dose response placeholder
+## Design C: dose response diagnostics
 
-The operations panel computes offered amount, accepted amount, and acceptance ratio. A future real-data pass can add accepted amount scaled by outstanding off-the-run stock or recent turnover once source coverage supports the denominator.
+The operations panel computes offered amount, accepted amount, and acceptance
+ratio. Event rows also report accepted amount scaled by sibling outstanding
+stock, sibling liquidity-weighted supply, and same-window TRACE volume when
+those denominators are available. These are diagnostic intensity measures, not
+structural treatment-dose estimates.
+
+## Design D: pretrend, placebo, and evidence grading
+
+`pretrend_diagnostics.csv` separates early-pre and late-pre changes from the
+post-event readout. `placebo_diagnostics.csv` applies the same targeted-versus-
+control logic to the pre-event window. `evidence_ledger.csv` turns source support,
+pretrend/placebo warnings, and dealer coverage into a compact evidence grade.
 
 ## Output interpretation
 
@@ -59,11 +74,9 @@ The generated report is required to describe the package as descriptive market-l
 
 ## TRACE source-quality extension
 
-The package now includes a TRACE source-granularity audit. The current real
-backend reuses `tdcladder` broad public aggregate turnover, which is useful for
-context but too coarse for clean target-bucket buyback claims. FINRA's public
-daily and monthly Treasury aggregate files advertise remaining maturity and
-on/off-run groupings for Nominal Coupons and TIPS, so the next implementable
-extension is direct ingestion of those aggregate files. Even with that upgrade,
-the evidence remains aggregate public volume/turnover context, not CUSIP-level
-liquidity or causal pass-through evidence.
+The package includes a TRACE source-granularity audit and a direct FINRA
+aggregate CSV import path. The current real package still falls back to
+`tdcladder` broad public aggregate turnover when no FINRA export is available
+locally. Even with direct FINRA aggregate imports, the evidence remains aggregate
+public volume/turnover context, not CUSIP-level liquidity or causal pass-through
+evidence.

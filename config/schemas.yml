@@ -28,13 +28,18 @@ datasets:
     primary_key:
       - date
       - maturity_bucket
+      - trace_category
+      - on_off_run
     required_columns:
       - date
       - maturity_bucket
       - trace_category
+      - on_off_run
+      - trace_security_type
       - trading_volume_usd_millions
       - outstanding_usd_millions
       - trace_turnover
+      - trace_source_granularity
   dealer_liquidity_context:
     primary_key:
       - date
@@ -57,6 +62,9 @@ datasets:
       - maturity_bucket
       - trading_volume_usd_millions
       - trace_turnover
+      - trace_category
+      - on_off_run
+      - trace_source_granularity
       - net_positions_usd_millions
       - financing_usd_millions
       - dealer_fails_total_usd_millions
@@ -77,7 +85,11 @@ datasets:
       - targeted_bucket
       - accepted_amount_usd_millions
       - buyback_intensity
+      - buyback_intensity_outstanding
+      - buyback_intensity_liquid_supply
+      - buyback_intensity_trace_volume
       - trace_turnover
+      - trace_source_granularity
       - dealer_fails_total_usd_millions
   buyback_event_summary:
     primary_key:
@@ -97,6 +109,18 @@ datasets:
       - pre_event_fails_mean
       - post_event_fails_mean
       - post_minus_pre_fails
+  buyback_source_reconciliation:
+    primary_key:
+      - operation_id
+    required_columns:
+      - operation_id
+      - operation_date
+      - fiscaldata_operation_present
+      - treasurydirect_preliminary_announcement
+      - treasurydirect_final_announcement
+      - treasurydirect_results
+      - treasurydirect_link_count
+      - source_reconciliation_status
   event_diagnostics:
     primary_key:
       - operation_id
@@ -109,7 +133,9 @@ datasets:
       - control_post_minus_pre_trace_turnover_mean
       - targeted_minus_control_trace_turnover_change
       - targeted_pretrend_trace_turnover_change
+      - placebo_targeted_minus_control_trace_turnover_change
       - pretrend_warning
+      - placebo_warning
       - trace_diagnostic_status
   coverage_qa:
     primary_key:
@@ -143,6 +169,7 @@ datasets:
       - post_minus_pre_net_position
       - buyback_intensity
       - coverage_status
+      - evidence_grade
   announcement_operation_summary:
     primary_key:
       - operation_id
@@ -155,6 +182,58 @@ datasets:
       - operation_minus_announcement_trace_change
       - announcement_net_position_change
       - operation_net_position_change
+  pretrend_diagnostics:
+    primary_key:
+      - operation_id
+      - event_type
+    required_columns:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+      - targeted_early_pre_trace_turnover_mean
+      - targeted_late_pre_trace_turnover_mean
+      - targeted_pretrend_trace_turnover_change
+      - control_pretrend_trace_turnover_mean
+      - targeted_minus_control_pretrend_trace_turnover_change
+      - pretrend_warning
+  placebo_diagnostics:
+    primary_key:
+      - operation_id
+      - event_type
+    required_columns:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+      - targeted_placebo_trace_turnover_change
+      - control_placebo_trace_turnover_mean
+      - placebo_targeted_minus_control_trace_turnover_change
+      - placebo_warning
+  dealer_source_granularity_audit:
+    primary_key:
+      - source_surface
+    required_columns:
+      - source_surface
+      - frequency
+      - maturity_detail
+      - repeated_across_buckets
+      - package_use
+      - claim_boundary
+      - upgrade_action
+  evidence_ledger:
+    primary_key:
+      - operation_id
+      - event_type
+    required_columns:
+      - operation_id
+      - event_type
+      - target_maturity_bucket
+      - evidence_grade
+      - claim_status
+      - limiting_factor
+      - trace_diagnostic_status
+      - coverage_status
+      - pretrend_warning
+      - placebo_warning
   trace_source_granularity_audit:
     primary_key:
       - source_surface

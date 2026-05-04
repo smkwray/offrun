@@ -49,6 +49,11 @@ def test_build_full_fixture_panel_and_report(temp_repo):
     liquidity_rows = read_csv(temp_repo / "data/derived/liquidity_context_panel.csv")
     assert any(row["sibling_liquidity_weight"] for row in liquidity_rows)
     assert summary_rows
+    assert (temp_repo / "output/tables/buyback_source_reconciliation.csv").exists()
+    assert (temp_repo / "output/tables/pretrend_diagnostics.csv").exists()
+    assert (temp_repo / "output/tables/placebo_diagnostics.csv").exists()
+    assert (temp_repo / "output/tables/evidence_ledger.csv").exists()
+    assert (temp_repo / "output/figures/evidence_grade_summary.svg").exists()
 
     failures = validate_claim_language(report.read_text(encoding="utf-8"), {
         "claim_boundary": {

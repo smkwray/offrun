@@ -18,7 +18,7 @@ The package must not claim:
 
 - causal domestic liquidity pass-through;
 - CUSIP-level liquidity from public TRACE aggregate data;
-- exogeneity of Treasury target selection without pre-trend and control-bucket checks;
+- exogeneity of Treasury target selection without pre-trend, placebo, and control-bucket checks;
 - that buybacks make long-duration debt money-like in the same way as Treasury bills;
 - that volume alone is liquidity.
 
@@ -29,4 +29,6 @@ The package must not claim:
 1. The report must include `descriptive market-liquidity evidence`.
 2. The report must not include forbidden unqualified phrases listed in `config/project.yml`.
 
-The gate is intentionally simple. Future versions may add richer claim-boundary linting, pre-trend checks, and source-coverage thresholds.
+The language gate is intentionally simple. The package also writes explicit
+pretrend, placebo, source-coverage, and evidence-ledger tables so interpretation
+can be screened before any row is promoted as a descriptive finding.

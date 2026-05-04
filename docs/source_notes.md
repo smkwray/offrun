@@ -19,7 +19,8 @@ The real backend can download and normalize FiscalData buyback operations with
 reused from sibling outputs before new downloaders are added:
 
 - FiscalData Treasury Securities Buybacks dataset for operation-level buyback data.
-- TreasuryDirect buyback announcements/results for schedules, operation notices, and results.
+- TreasuryDirect buyback announcements/results links exposed through FiscalData for
+  operation notices and results cross-checks.
 - FINRA TRACE Treasury aggregate statistics only at the public aggregate level.
 - New York Fed Primary Dealer Statistics for weekly positions, transactions, financing, and fails.
 - H.15 / GSW rates only as optional controls.
@@ -30,10 +31,15 @@ reused from sibling outputs before new downloaders are added:
 normalized inputs under `data/imported/`:
 
 - FiscalData buyback operations into `data/imported/buybacks/buyback_operations.csv`.
+- FiscalData/TreasuryDirect source-link status into
+  `output/tables/buyback_source_reconciliation.csv` during panel construction.
 - [`tdcladder`](https://github.com/smkwray/tdcladder) bucket-level Treasury stock/liquidity context into
   `data/imported/tdcladder/monthly_ladder_panel.csv`.
-- [`tdcladder`](https://github.com/smkwray/tdcladder) public aggregate TRACE turnover into
-  `data/imported/trace/trace_treasury_aggregates.csv`.
+- Direct FINRA Treasury aggregate CSV exports into
+  `data/imported/trace/trace_treasury_aggregates.csv` when present under
+  `data/raw/finra/trace_treasury_aggregates.csv`; otherwise
+  [`tdcladder`](https://github.com/smkwray/tdcladder) public aggregate TRACE turnover into the
+  same normalized path.
 - [`buycurve`](https://github.com/smkwray/buycurve) issuance/maturity context into
   `data/imported/buycurve/monthly_issuance_maturity_context.csv`.
 - [`buycurve`](https://github.com/smkwray/buycurve) cleaned New York Fed primary-dealer positions into
@@ -45,9 +51,10 @@ normalized inputs under `data/imported/`:
 
 The normalized imports are local build products, not public repository content.
 
-The generated triage outputs are also local build products. `results_triage.csv`
-and `offrun_findings_report.md` classify rows as descriptive diagnostics only;
-they do not promote causal language or CUSIP-level liquidity claims.
+The generated triage outputs are also local build products. `results_triage.csv`,
+`pretrend_diagnostics.csv`, `placebo_diagnostics.csv`, `evidence_ledger.csv`, and
+`offrun_findings_report.md` classify rows as descriptive diagnostics only; they
+do not promote causal language or CUSIP-level liquidity claims.
 
 ## Public TRACE boundary
 
@@ -57,13 +64,14 @@ Public aggregate TRACE statistics can support descriptive volume or turnover con
 `output/tables/trace_source_granularity_audit.csv`. The audit records that the
 current real package uses the `tdcladder` broad aggregate turnover fallback, but
 FINRA's public daily and monthly Treasury aggregate files advertise remaining
-maturity and on/off-run groupings for Nominal Coupons and TIPS. That is the
-right next source upgrade for target-bucket/off-run diagnostics. It still does
-not remove the CUSIP-level and transaction-level claim boundary.
+maturity and on/off-run groupings for Nominal Coupons and TIPS. `offrun
+import-finra-trace-aggregates --input <csv>` normalizes a local FINRA aggregate
+CSV export and preserves maturity and on/off-run fields when present. It still
+does not remove the CUSIP-level and transaction-level claim boundary.
 
 ## Dealer statistics boundary
 
-Primary Dealer Statistics are useful for positions, financing, and settlement-fails diagnostics. They are dealer-sector aggregates and should not be described as individual dealer balance sheets. Net-position rows are mapped to maturity buckets where the source series support that mapping; financing and fails rows are aggregate Treasury/TIPS diagnostics, not maturity-bucket-specific observations.
+Primary Dealer Statistics are useful for positions, financing, and settlement-fails diagnostics. They are dealer-sector aggregates and should not be described as individual dealer balance sheets. Net-position rows are mapped to maturity buckets where the source series support that mapping; financing and fails rows are aggregate Treasury/TIPS diagnostics, not maturity-bucket-specific observations. `output/tables/dealer_source_granularity_audit.csv` records that boundary explicitly.
 
 ## Data policy
 

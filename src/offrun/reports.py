@@ -143,6 +143,41 @@ def _write_event_svg(rows: list[dict[str, str]], output_path: Path) -> None:
     write_text(output_path, "\n".join(lines) + "\n")
 
 
+def _write_count_svg(
+    rows: list[dict[str, str]],
+    output_path: Path,
+    *,
+    field: str,
+    title: str,
+) -> None:
+    counts = _status_counts(rows, field)
+    height = 80 + 34 * max(len(counts), 1)
+    width = 760
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">',
+        '<rect width="760" height="100%" fill="white"/>',
+        f'<text x="20" y="28" font-size="16" font-family="sans-serif">{title}</text>',
+    ]
+    if not counts:
+        lines.append(
+            '<text x="20" y="64" font-size="12" font-family="sans-serif">No rows.</text>'
+        )
+    max_count = max(counts.values(), default=1)
+    for index, (label, count) in enumerate(counts.items()):
+        y = 58 + 34 * index
+        bar_width = int(420 * count / max_count) if max_count else 0
+        lines.extend(
+            [
+                f'<text x="20" y="{y + 14}" font-size="12" font-family="sans-serif">'
+                f"{label}: {count}</text>",
+                f'<rect x="280" y="{y}" width="{bar_width}" height="18" fill="#8aa"/>',
+            ]
+        )
+    lines.append("</svg>")
+    write_text(output_path, "\n".join(lines) + "\n")
+
+
 def _status_counts(rows: list[dict[str, str]], field: str) -> dict[str, int]:
     counts: dict[str, int] = defaultdict(int)
     for row in rows:
@@ -278,8 +313,10 @@ def write_offrun_report(
     panel_rows = read_csv(panel_file)
     summary_rows = read_csv(summary_file)
     operation_rows = read_csv(config.path("buyback_operations"))
+    reconciliation_rows = read_csv(config.path("buyback_source_reconciliation"))
     diagnostics_rows = read_csv(config.path("event_diagnostics"))
     triage_rows = read_csv(config.path("results_triage"))
+    evidence_rows = read_csv(config.path("evidence_ledger"))
     coverage_rows = read_csv(config.path("coverage_qa"))
     announcement_operation_rows = read_csv(config.path("announcement_operation_summary"))
     if not panel_rows:
@@ -294,6 +331,18 @@ def write_offrun_report(
 
     _write_timeline_svg(operation_rows, figures / "buyback_timeline.svg", fixture=fixture_build)
     _write_event_svg(summary_rows, figures / "targeted_bucket_event_windows.svg")
+    _write_count_svg(
+        evidence_rows,
+        config.path("evidence_grade_figure"),
+        field="evidence_grade",
+        title="Evidence-grade summary",
+    )
+    _write_count_svg(
+        diagnostics_rows,
+        config.path("source_granularity_figure"),
+        field="trace_diagnostic_status",
+        title="TRACE diagnostic support summary",
+    )
     _write_findings_report(
         config.path("findings_report"),
         operation_rows=operation_rows,
@@ -315,6 +364,7 @@ def write_offrun_report(
         1 for row in diagnostics_rows if row.get("trace_diagnostic_status") == "diagnostic_ready"
     )
     pretrend_warnings = sum(1 for row in diagnostics_rows if row.get("pretrend_warning") == "1")
+    placebo_warnings = sum(1 for row in diagnostics_rows if row.get("placebo_warning") == "1")
     supportive_rows = sum(
         1 for row in triage_rows if row.get("claim_status") == "supportive_diagnostic"
     )
@@ -328,6 +378,11 @@ def write_offrun_report(
         1
         for row in announcement_operation_rows
         if row.get("announcement_trace_change") and row.get("operation_trace_change")
+    )
+    crosscheck_ready = sum(
+        1
+        for row in reconciliation_rows
+        if row.get("source_reconciliation_status") == "treasurydirect_crosscheck_ready"
     )
 
     package_label = "fixture-backed smoke package" if fixture_build else "real-source package"
@@ -373,24 +428,35 @@ around Treasury buyback announcement and operation windows. The current build is
 - Rows with dealer fails diagnostic: {non_missing_fails}
 - Event diagnostics ready for targeted-versus-control TRACE review: {diagnostic_ready}
 - Event diagnostics with pretrend warnings: {pretrend_warnings}
+- Event diagnostics with placebo warnings: {placebo_warnings}
 - Event windows with both TRACE and dealer-position coverage: {trace_dealer_coverage}
 - Operation/event pairs with both announcement and operation TRACE changes: {compared_event_types}
+- Buyback operations with TreasuryDirect announcement/results link cross-checks: {crosscheck_ready}
 - Supportive diagnostic rows: {supportive_rows}
 - Mixed diagnostic rows: {mixed_rows}
 
 ## Diagnostic surfaces
 
 - `output/tables/coverage_qa.csv` reports proxy coverage by operation and event type.
+- `output/tables/buyback_source_reconciliation.csv` records whether buyback rows have
+  FiscalData operation records and TreasuryDirect announcement/results links.
 - `output/tables/event_diagnostics.csv` reports targeted-bucket changes, nearby-control
   changes, targeted-minus-control differences, and pretrend warnings.
 - `output/tables/results_triage.csv` ranks diagnostic rows and assigns descriptive
   claim-status labels.
+- `output/tables/pretrend_diagnostics.csv` and `output/tables/placebo_diagnostics.csv`
+  separate pre-event drift checks from post-event descriptive readouts.
+- `output/tables/evidence_ledger.csv` assigns source-limited evidence grades.
+- `output/tables/dealer_source_granularity_audit.csv` records which dealer proxies
+  are maturity-bucketed and which are aggregate context.
 - `output/tables/announcement_operation_summary.csv` compares announcement-window and
   operation-window changes for each completed buyback operation.
 - `output/tables/trace_source_granularity_audit.csv` records whether public TRACE
   source granularity can support better target-bucket or on/off-run diagnostics.
 - Buyback intensity is accepted amount scaled by sibling outstanding stock when the
-  `tdcladder` denominator is available.
+  `tdcladder` denominator is available. Alternative denominators scale accepted
+  amount by liquidity-weighted sibling supply and same-window TRACE volume when
+  those fields are available.
 
 ## Interpretation boundary
 
@@ -408,14 +474,21 @@ comparisons.
 
 - `data/derived/offrun_panel.csv`
 - `output/tables/buyback_event_summary.csv`
+- `output/tables/buyback_source_reconciliation.csv`
 - `output/tables/event_diagnostics.csv`
 - `output/tables/results_triage.csv`
+- `output/tables/pretrend_diagnostics.csv`
+- `output/tables/placebo_diagnostics.csv`
+- `output/tables/evidence_ledger.csv`
+- `output/tables/dealer_source_granularity_audit.csv`
 - `output/tables/coverage_qa.csv`
 - `output/tables/announcement_operation_summary.csv`
 - `output/tables/trace_source_granularity_audit.csv`
 - `output/tables/source_inventory.csv`
 - `output/figures/buyback_timeline.svg`
 - `output/figures/targeted_bucket_event_windows.svg`
+- `output/figures/evidence_grade_summary.svg`
+- `output/figures/source_granularity_summary.svg`
 - `output/reports/offrun_findings_report.md`
 
 {fixture_note}

@@ -61,8 +61,84 @@ def _bucket_from_source(value: str) -> str:
         "g2": "3-7y",
         "g6l11": "7-10y",
         "g11": "20-30y",
+        "0-1y": "1-3y",
+        "0to1y": "1-3y",
+        "1-5y": "3-7y",
+        "1to5y": "3-7y",
+        "5-10y": "7-10y",
+        "5to10y": "7-10y",
+        "10-20years": "10-20y",
+        "20-30years": "20-30y",
+        "over30y": "20-30y",
+        ">30y": "20-30y",
+        "greaterthan30y": "20-30y",
     }
     return mapping.get(text, "")
+
+
+def _normalized_key(value: str) -> str:
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+def _first_present(row: dict[str, str], candidates: tuple[str, ...]) -> str:
+    keyed = {_normalized_key(key): value for key, value in row.items()}
+    for candidate in candidates:
+        value = keyed.get(_normalized_key(candidate), "")
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _normalize_on_off_run(value: str) -> str:
+    text = value.strip().lower().replace("_", " ").replace("-", " ")
+    if not text:
+        return "unknown"
+    if "off" in text:
+        return "off_the_run"
+    if "on" in text:
+        return "on_the_run"
+    if "total" in text or "all" in text or "aggregate" in text:
+        return "aggregate"
+    return text.replace(" ", "_")
+
+
+def _volume_usd_millions(row: dict[str, str]) -> float:
+    raw = _first_present(
+        row,
+        (
+            "trading_volume_usd_millions",
+            "total_volume_usd_millions",
+            "volume_usd_millions",
+            "trading_volume",
+            "total_volume",
+            "volume",
+            "par_volume",
+            "total_par_value",
+            "sum_par_value",
+        ),
+    )
+    value = as_float(raw)
+    key_text = " ".join(row.keys()).lower()
+    if value and "millions" not in key_text and value > 1_000_000:
+        return value / 1_000_000
+    return value
+
+
+def _outstanding_usd_millions(row: dict[str, str]) -> float:
+    raw = _first_present(
+        row,
+        (
+            "outstanding_usd_millions",
+            "outstanding_amount_usd_millions",
+            "outstanding_amount",
+            "amount_outstanding",
+        ),
+    )
+    value = as_float(raw)
+    key_text = " ".join(row.keys()).lower()
+    if value and "millions" not in key_text and value > 1_000_000:
+        return value / 1_000_000
+    return value
 
 
 def _month(value: str) -> str:
@@ -262,6 +338,7 @@ def normalize_tdcladder_context(
                 "date": date,
                 "maturity_bucket": bucket,
                 "outstanding_usd_millions": format_number(supply),
+                "liquid_supply_usd_millions": format_number(values["liquid"]),
                 "liquidity_weight": format_number(values["liquid"] / supply if supply else None),
             }
         )
@@ -269,7 +346,116 @@ def normalize_tdcladder_context(
     write_csv(
         output,
         rows,
-        ["date", "maturity_bucket", "outstanding_usd_millions", "liquidity_weight"],
+        [
+            "date",
+            "maturity_bucket",
+            "outstanding_usd_millions",
+            "liquid_supply_usd_millions",
+            "liquidity_weight",
+        ],
+    )
+    return output
+
+
+def _direct_trace_input(config_root: Path) -> Path | None:
+    candidates = [
+        config_root / "data/raw/finra/trace_treasury_aggregates.csv",
+        config_root / "data/raw/trace/trace_treasury_aggregates.csv",
+        config_root / "data/imported/trace/finra_trace_treasury_aggregates.csv",
+    ]
+    return next((path for path in candidates if path.exists()), None)
+
+
+def normalize_direct_finra_trace_context(
+    repo_root: Path | str | None = None,
+    *,
+    input_path: Path | str | None = None,
+    output_path: Path | str | None = None,
+) -> Path:
+    """Normalize a FINRA Treasury aggregate CSV export into offrun TRACE input."""
+
+    config = load_config(repo_root)
+    source = Path(input_path) if input_path is not None else _direct_trace_input(config.repo_root)
+    if source is None:
+        raise OffrunError(
+            "No direct FINRA TRACE aggregate CSV found under data/raw/finra, data/raw/trace, "
+            "or data/imported/trace."
+        )
+    rows = []
+    for row in read_csv(source):
+        date = _first_present(
+            row,
+            (
+                "date",
+                "as_of_date",
+                "trade_date",
+                "report_date",
+                "reporting_date",
+                "calendar_date",
+            ),
+        )
+        bucket = _bucket_from_source(
+            _first_present(
+                row,
+                (
+                    "maturity_bucket",
+                    "remaining_maturity_bucket",
+                    "remaining_maturity",
+                    "maturity",
+                    "tenor",
+                ),
+            )
+        )
+        if not date or not bucket:
+            continue
+        security_type = _first_present(
+            row,
+            ("security_type", "product", "security", "asset_type", "instrument_type"),
+        )
+        on_off_run = _normalize_on_off_run(
+            _first_present(
+                row,
+                ("on_off_run", "on/off_run", "on_off_the_run", "run_status", "security_status"),
+            )
+        )
+        volume = _volume_usd_millions(row)
+        outstanding = _outstanding_usd_millions(row)
+        rows.append(
+            {
+                "date": date[:10],
+                "maturity_bucket": bucket,
+                "trace_category": "FINRA Treasury aggregate",
+                "on_off_run": on_off_run,
+                "trace_security_type": security_type,
+                "trading_volume_usd_millions": format_number(volume),
+                "outstanding_usd_millions": format_number(outstanding if outstanding else None),
+                "trace_turnover": format_number(volume / outstanding if outstanding else None),
+                "trace_source_granularity": "finra_aggregate_maturity_on_off_run",
+                "source_family": "finra_treasury_aggregate_direct_csv",
+            }
+        )
+    if not rows:
+        raise OffrunError(f"No usable FINRA TRACE aggregate rows found in {source}")
+    output = (
+        Path(output_path)
+        if output_path is not None
+        else config.repo_root / "data/imported/trace/trace_treasury_aggregates.csv"
+    )
+    write_csv(
+        output,
+        rows,
+        [
+            "date",
+            "maturity_bucket",
+            "trace_category",
+            "on_off_run",
+            "trace_security_type",
+            "trading_volume_usd_millions",
+            "outstanding_usd_millions",
+            "trace_turnover",
+            "trace_source_granularity",
+            "source_family",
+        ],
     )
     return output
 
@@ -367,6 +553,9 @@ def normalize_trace_context(
     """Normalize public aggregate TRACE turnover context from tdcladder."""
 
     config = load_config(repo_root)
+    direct_trace = _direct_trace_input(config.repo_root)
+    if direct_trace is not None:
+        return normalize_direct_finra_trace_context(config.repo_root, input_path=direct_trace)
     source = _source_path(
         Path(sibling_root).resolve(),
         "tdcladder",
@@ -383,12 +572,16 @@ def normalize_trace_context(
                     "date": _month(row.get("month", "")),
                     "maturity_bucket": bucket,
                     "trace_category": f"{security_type} public aggregate",
+                    "on_off_run": "aggregate",
+                    "trace_security_type": security_type,
                     "trading_volume_usd_millions": format_number(
                         as_float(row.get("trace_volume")) / 1_000_000
                     ),
                     "outstanding_usd_millions": format_number(
                         as_float(row.get("outstanding_amount")) / 1_000_000
                     ),
+                    "trace_turnover": "",
+                    "trace_source_granularity": "tdcladder_reused_public_aggregate",
                     "source_family": "tdcladder_finra_trace_public_aggregate",
                 }
             )
@@ -400,8 +593,12 @@ def normalize_trace_context(
             "date",
             "maturity_bucket",
             "trace_category",
+            "on_off_run",
+            "trace_security_type",
             "trading_volume_usd_millions",
             "outstanding_usd_millions",
+            "trace_turnover",
+            "trace_source_granularity",
             "source_family",
         ],
     )
