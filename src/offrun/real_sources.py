@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
+import zipfile
 from collections import defaultdict
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
 
 from .config import load_config
 from .io import OffrunError, as_float, format_number, read_csv, write_csv, write_json
@@ -16,8 +21,12 @@ FISCALDATA_BUYBACKS_ENDPOINT = (
     "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/"
     "v1/accounting/od/buybacks_operations"
 )
+FINRA_TRACE_BASE_URL = "https://cdn.finra.org/trace/treasury-aggregates"
+FINRA_DAILY_START = date(2023, 2, 13)
+FINRA_MONTHLY_START = date(2023, 2, 1)
 
 ANALYSIS_BUCKETS = ("1-3y", "3-7y", "7-10y", "10-20y", "20-30y")
+FINRA_XLSX_NS = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 
 def _bucket_from_source(value: str) -> str:
@@ -150,6 +159,287 @@ def _month(value: str) -> str:
 
 def _source_path(root: Path, sibling: str, relative: str) -> Path:
     return root / sibling / relative
+
+
+def _parse_iso_date(value: str | None, default: date) -> date:
+    if not value:
+        return default
+    return date.fromisoformat(value)
+
+
+def _iter_months(start: date, end: date) -> list[date]:
+    months: list[date] = []
+    current = date(start.year, start.month, 1)
+    end_month = date(end.year, end.month, 1)
+    while current <= end_month:
+        months.append(current)
+        year = current.year + (1 if current.month == 12 else 0)
+        month = 1 if current.month == 12 else current.month + 1
+        current = date(year, month, 1)
+    return months
+
+
+def _iter_weekdays(start: date, end: date) -> list[date]:
+    days: list[date] = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            days.append(current)
+        current += timedelta(days=1)
+    return days
+
+
+def _finra_url(frequency: str, period: date) -> tuple[str, str]:
+    if frequency == "daily":
+        stamp = period.isoformat()
+        return (
+            f"{FINRA_TRACE_BASE_URL}/daily/ts-daily-aggregates-{stamp}.xlsx",
+            f"ts-daily-aggregates-{stamp}.xlsx",
+        )
+    if frequency == "monthly":
+        stamp = f"{period.year:04d}-{period.month:02d}"
+        return (
+            f"{FINRA_TRACE_BASE_URL}/monthly/ts-monthly-aggregates-{stamp}.xlsx",
+            f"ts-monthly-aggregates-{stamp}.xlsx",
+        )
+    raise OffrunError(f"Unknown FINRA TRACE aggregate frequency: {frequency}")
+
+
+def _download_binary(url: str) -> bytes | None:
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            data = response.read()
+    except HTTPError as exc:
+        if exc.code in {403, 404}:
+            return None
+        raise
+    except URLError:
+        return None
+    return data if len(data) > 1000 else None
+
+
+def download_finra_trace_aggregates(
+    repo_root: Path | str | None = None,
+    *,
+    frequency: str = "daily",
+    start_date: str | None = None,
+    end_date: str | None = None,
+    overwrite: bool = False,
+) -> list[Path]:
+    """Download public FINRA Treasury aggregate XLSX files into ignored raw data."""
+
+    config = load_config(repo_root)
+    today = date.today()
+    if frequency == "daily":
+        start = _parse_iso_date(start_date, FINRA_DAILY_START)
+        end = _parse_iso_date(end_date, today - timedelta(days=1))
+        periods = _iter_weekdays(start, end)
+    elif frequency == "monthly":
+        start = _parse_iso_date(start_date, FINRA_MONTHLY_START)
+        end = _parse_iso_date(end_date, date(today.year, today.month, 1))
+        periods = _iter_months(start, end)
+    else:
+        raise OffrunError(f"Unknown FINRA TRACE aggregate frequency: {frequency}")
+
+    output_dir = config.repo_root / f"data/raw/finra/{frequency}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    downloaded: list[Path] = []
+    missing: list[str] = []
+    for period in periods:
+        url, filename = _finra_url(frequency, period)
+        output = output_dir / filename
+        if output.exists() and output.stat().st_size > 1000 and not overwrite:
+            downloaded.append(output)
+            continue
+        data = _download_binary(url)
+        if data is None:
+            missing.append(period.isoformat())
+            continue
+        output.write_bytes(data)
+        downloaded.append(output)
+    write_json(
+        output_dir / f"{frequency}_download_manifest.json",
+        {
+            "source": f"FINRA Treasury {frequency.title()} Aggregate Statistics - Files",
+            "base_url": FINRA_TRACE_BASE_URL,
+            "frequency": frequency,
+            "downloaded_count": len(downloaded),
+            "missing_count": len(missing),
+            "missing_periods": missing,
+        },
+    )
+    return downloaded
+
+
+def _xlsx_table(path: Path) -> list[list[str]]:
+    with zipfile.ZipFile(path) as archive:
+        shared: list[str] = []
+        if "xl/sharedStrings.xml" in archive.namelist():
+            root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+            for item in root.findall("a:si", FINRA_XLSX_NS):
+                shared.append(
+                    "".join(
+                        text.text or "" for text in item.findall(".//a:t", FINRA_XLSX_NS)
+                    )
+                )
+        sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+    rows: list[list[str]] = []
+    for row in sheet.findall(".//a:sheetData/a:row", FINRA_XLSX_NS):
+        values: list[str] = []
+        for cell in row.findall("a:c", FINRA_XLSX_NS):
+            value = cell.find("a:v", FINRA_XLSX_NS)
+            text = "" if value is None else value.text or ""
+            if cell.attrib.get("t") == "s" and text:
+                text = shared[int(text)]
+            values.append(text)
+        rows.append(values)
+    return rows
+
+
+def _finra_report_date(rows: list[list[str]], fallback: date, frequency: str) -> str:
+    title = rows[0][0] if rows and rows[0] else ""
+    match = re.search(r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})", title)
+    if not match:
+        return fallback.isoformat() if frequency == "daily" else f"{fallback:%Y-%m}-01"
+    parsed = datetime.strptime(" ".join(match.groups()), "%B %d %Y").date()
+    return parsed.isoformat() if frequency == "daily" else f"{parsed:%Y-%m}-01"
+
+
+def _finra_bucket(label: str) -> str:
+    mapping = {
+        "<= 2 years": "1-3y",
+        "> 2 years and <= 3 years": "1-3y",
+        "> 3 years and <= 5 years": "3-7y",
+        "> 5 years and <= 7 years": "3-7y",
+        "> 7 years and <= 10 years": "7-10y",
+        "> 10 years and <= 20 years": "10-20y",
+        "> 20 years": "20-30y",
+        "<= 5 years": "3-7y",
+        "> 5 years and <= 10 years": "7-10y",
+        "> 10 years": "20-30y",
+    }
+    return mapping.get(label, "")
+
+
+def _finra_outstanding_context(config_root: Path) -> dict[tuple[str, str], str]:
+    path = config_root / "data/imported/tdcladder/monthly_ladder_panel.csv"
+    if not path.exists():
+        return {}
+    return {
+        (row.get("date", ""), row.get("maturity_bucket", "")): row.get(
+            "outstanding_usd_millions",
+            "",
+        )
+        for row in read_csv(path)
+    }
+
+
+def convert_finra_trace_aggregates(
+    repo_root: Path | str | None = None,
+    *,
+    frequency: str = "daily",
+    input_dir: Path | str | None = None,
+    output_path: Path | str | None = None,
+) -> Path:
+    """Convert FINRA Treasury aggregate XLSX files to offrun's direct TRACE CSV."""
+
+    config = load_config(repo_root)
+    source_dir = (
+        Path(input_dir)
+        if input_dir is not None
+        else config.repo_root / f"data/raw/finra/{frequency}"
+    )
+    files = sorted(source_dir.glob(f"ts-{frequency}-aggregates-*.xlsx"))
+    if not files:
+        raise OffrunError(f"No FINRA {frequency} aggregate XLSX files found in {source_dir}")
+
+    outstanding = _finra_outstanding_context(config.repo_root)
+    grouped: dict[tuple[str, str, str, str], dict[str, float]] = defaultdict(
+        lambda: defaultdict(float)
+    )
+    for path in files:
+        rows = _xlsx_table(path)
+        match = re.search(r"(\d{4})-(\d{2})(?:-(\d{2}))?$", path.stem)
+        if match is None:
+            raise OffrunError(f"Cannot parse FINRA aggregate file date: {path}")
+        fallback = date(
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3) or "1"),
+        )
+        report_date = _finra_report_date(rows, fallback, frequency)
+        security_type = ""
+        bucket = ""
+        for values in rows:
+            label = values[0].strip() if values else ""
+            if label in {"Nominal Coupons", "TIPS"}:
+                security_type = label
+                bucket = ""
+                continue
+            if label in {"Bills", "FRNs", "Total", "Notes", ""}:
+                continue
+            if security_type not in {"Nominal Coupons", "TIPS"}:
+                continue
+            mapped_bucket = _finra_bucket(label)
+            if mapped_bucket:
+                bucket = mapped_bucket
+                on_off_run = "aggregate"
+            elif label in {"On-the-run", "Off-the-run"} and bucket:
+                on_off_run = "on_the_run" if label.startswith("On") else "off_the_run"
+            else:
+                continue
+            trades = as_float(values[5] if len(values) > 5 else "")
+            volume = as_float(values[6] if len(values) > 6 else "") * 1000.0
+            key = (report_date, bucket, security_type, on_off_run)
+            grouped[key]["trade_count"] += trades
+            grouped[key]["volume"] += volume
+
+    rows_out: list[dict[str, str]] = []
+    for (report_date, bucket, security_type, on_off_run), values in sorted(grouped.items()):
+        stock = outstanding.get((_month(report_date), bucket), "")
+        stock_value = as_float(stock)
+        volume = values["volume"]
+        rows_out.append(
+            {
+                "date": report_date,
+                "maturity_bucket": bucket,
+                "trace_category": f"FINRA Treasury {frequency} aggregate",
+                "on_off_run": on_off_run,
+                "trace_security_type": security_type,
+                "trade_count": format_number(values["trade_count"]),
+                "trading_volume_usd_millions": format_number(volume),
+                "outstanding_usd_millions": stock,
+                "trace_turnover": format_number(volume / stock_value if stock_value else None),
+                "trace_source_granularity": (
+                    f"finra_{frequency}_aggregate_maturity_on_off_run"
+                ),
+                "source_family": f"finra_treasury_{frequency}_aggregate_xlsx",
+            }
+        )
+    output = (
+        Path(output_path)
+        if output_path is not None
+        else config.repo_root / "data/raw/finra/trace_treasury_aggregates.csv"
+    )
+    write_csv(
+        output,
+        rows_out,
+        [
+            "date",
+            "maturity_bucket",
+            "trace_category",
+            "on_off_run",
+            "trace_security_type",
+            "trade_count",
+            "trading_volume_usd_millions",
+            "outstanding_usd_millions",
+            "trace_turnover",
+            "trace_source_granularity",
+            "source_family",
+        ],
+    )
+    return output
 
 
 def _fetch_fiscaldata_rows(endpoint: str = FISCALDATA_BUYBACKS_ENDPOINT) -> list[dict[str, Any]]:
@@ -331,11 +621,11 @@ def normalize_tdcladder_context(
         grouped[key]["supply"] += supply
         grouped[key]["liquid"] += liquid
     rows = []
-    for (date, bucket), values in sorted(grouped.items()):
+    for (date_text, bucket), values in sorted(grouped.items()):
         supply = values["supply"]
         rows.append(
             {
-                "date": date,
+                "date": date_text,
                 "maturity_bucket": bucket,
                 "outstanding_usd_millions": format_number(supply),
                 "liquid_supply_usd_millions": format_number(values["liquid"]),
@@ -431,14 +721,20 @@ def normalize_direct_finra_trace_context(
             {
                 "date": date[:10],
                 "maturity_bucket": bucket,
-                "trace_category": "FINRA Treasury aggregate",
+                "trace_category": row.get("trace_category", "FINRA Treasury aggregate"),
                 "on_off_run": on_off_run,
                 "trace_security_type": security_type,
                 "trading_volume_usd_millions": format_number(volume),
                 "outstanding_usd_millions": format_number(outstanding if outstanding else None),
                 "trace_turnover": format_number(volume / outstanding if outstanding else None),
-                "trace_source_granularity": "finra_aggregate_maturity_on_off_run",
-                "source_family": "finra_treasury_aggregate_direct_csv",
+                "trace_source_granularity": row.get(
+                    "trace_source_granularity",
+                    "finra_aggregate_maturity_on_off_run",
+                ),
+                "source_family": row.get(
+                    "source_family",
+                    "finra_treasury_aggregate_direct_csv",
+                ),
             }
         )
     if not rows:
@@ -491,11 +787,11 @@ def normalize_buycurve_context(
         grouped[key]["weighted_maturity"] += accepted * as_float(row.get("weighted_maturity_years"))
         grouped[key]["bill_amount"] += accepted if row.get("security_type") == "Bill" else 0.0
     rows = []
-    for (date, bucket), values in sorted(grouped.items()):
+    for (date_text, bucket), values in sorted(grouped.items()):
         accepted = values["accepted"]
         rows.append(
             {
-                "date": date,
+                "date": date_text,
                 "maturity_bucket": bucket,
                 "gross_issuance_usd_millions": format_number(accepted),
                 "bill_share": format_number(values["bill_amount"] / accepted if accepted else 0.0),
@@ -660,10 +956,10 @@ def normalize_dealer_context(
             for bucket in ANALYSIS_BUCKETS:
                 grouped[(row.get("As Of Date", ""), bucket)][field] += value
     rows = []
-    for (date, bucket), values in sorted(grouped.items()):
+    for (date_text, bucket), values in sorted(grouped.items()):
         rows.append(
             {
-                "date": date,
+                "date": date_text,
                 "maturity_bucket": bucket,
                 "dealer_category": "primary_dealer_position_financing_fails",
                 "net_positions_usd_millions": format_number(

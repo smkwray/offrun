@@ -41,7 +41,7 @@ make smoke-fixtures
 
 `make smoke-fixtures` builds a complete no-external-data package from the synthetic CSV files under `tests/fixtures/`.
 
-`make real-package` validates reusable sibling artifacts, downloads the FiscalData buyback operations feed into ignored project-local raw data, normalizes sibling/source inputs into `data/imported/`, and builds the ignored real output package.
+`make real-package` validates reusable sibling artifacts, downloads the FiscalData buyback operations feed and public FINRA daily Treasury aggregate files into ignored project-local raw data, normalizes sibling/source inputs into `data/imported/`, and builds the ignored real output package.
 
 ## CLI command map
 
@@ -51,6 +51,7 @@ offrun validate-sibling-sources --sibling-root .. --strict
 offrun copy-sibling-outputs --sibling-root .. --overwrite
 offrun download-fiscaldata-buybacks
 offrun prepare-real-inputs --sibling-root .. --download-buybacks
+offrun download-finra-trace-aggregates --frequency daily
 offrun import-finra-trace-aggregates --input data/raw/finra/trace_treasury_aggregates.csv
 offrun audit-trace-source-granularity --sibling-root ..
 offrun build-buyback-operations-panel
@@ -97,7 +98,7 @@ output/manifests/offrun_manifest.json
 
 These generated files are intentionally ignored by git. The repository should contain code, contracts, docs, and tiny fixtures only.
 
-The real backend currently uses FiscalData Treasury buyback operations, [`tdcladder`](https://github.com/smkwray/tdcladder) bucket-level maturity/liquidity context and public aggregate TRACE turnover, [`buycurve`](https://github.com/smkwray/buycurve) issuance/maturity and primary-dealer context, and [`liqsub`](https://github.com/smkwray/liqsub) monthly liquidity-plumbing context. If a FINRA Treasury aggregate CSV export is placed under `data/raw/finra/trace_treasury_aggregates.csv`, `prepare-real-inputs` uses it instead of the sibling TRACE fallback and preserves maturity and on/off-run fields when present. TRACE remains aggregate public data, not CUSIP-level or transaction-level liquidity. Dealer net positions are bucket-mapped where the NY Fed series support it; dealer financing and fails are aggregate Treasury/TIPS diagnostics.
+The real backend currently uses FiscalData Treasury buyback operations, public FINRA daily Treasury aggregate statistics, [`tdcladder`](https://github.com/smkwray/tdcladder) bucket-level maturity/liquidity context, [`buycurve`](https://github.com/smkwray/buycurve) issuance/maturity and primary-dealer context, and [`liqsub`](https://github.com/smkwray/liqsub) monthly liquidity-plumbing context. FINRA daily files preserve public aggregate maturity and on/off-run fields for Nominal Coupons and TIPS. TRACE remains aggregate public data, not CUSIP-level or transaction-level liquidity. Dealer net positions are bucket-mapped where the NY Fed series support it; dealer financing and fails are aggregate Treasury/TIPS diagnostics.
 
 `output/tables/results_triage.csv` ranks operation/event rows and assigns descriptive
 claim-status labels. `output/reports/offrun_findings_report.md` summarizes those

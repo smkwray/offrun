@@ -17,6 +17,8 @@ from .panels import (
     build_offrun_panel,
 )
 from .real_sources import (
+    convert_finra_trace_aggregates,
+    download_finra_trace_aggregates,
     download_fiscaldata_buybacks,
     normalize_direct_finra_trace_context,
     prepare_real_inputs,
@@ -161,6 +163,30 @@ def _cmd_import_finra_trace(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_download_finra_trace(args: argparse.Namespace) -> int:
+    files = download_finra_trace_aggregates(
+        _repo_root(args),
+        frequency=args.frequency,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        overwrite=args.overwrite,
+    )
+    raw_csv = convert_finra_trace_aggregates(
+        _repo_root(args),
+        frequency=args.frequency,
+        output_path=args.raw_output,
+    )
+    imported = normalize_direct_finra_trace_context(
+        _repo_root(args),
+        input_path=raw_csv,
+        output_path=args.import_output,
+    )
+    print(f"downloaded_or_found {len(files)} FINRA {args.frequency} aggregate files")
+    print(f"wrote {raw_csv}")
+    print(f"wrote {imported}")
+    return 0
+
+
 def _cmd_audit_trace_source(args: argparse.Namespace) -> int:
     path = audit_trace_source_granularity(
         _repo_root(args),
@@ -251,6 +277,19 @@ def build_parser() -> argparse.ArgumentParser:
     finra_parser.add_argument("--input", required=True)
     finra_parser.add_argument("--output", default=None)
     finra_parser.set_defaults(func=_cmd_import_finra_trace)
+
+    finra_download_parser = subparsers.add_parser("download-finra-trace-aggregates")
+    finra_download_parser.add_argument(
+        "--frequency",
+        choices=("daily", "monthly"),
+        default="daily",
+    )
+    finra_download_parser.add_argument("--start-date", default=None)
+    finra_download_parser.add_argument("--end-date", default=None)
+    finra_download_parser.add_argument("--overwrite", action="store_true")
+    finra_download_parser.add_argument("--raw-output", default=None)
+    finra_download_parser.add_argument("--import-output", default=None)
+    finra_download_parser.set_defaults(func=_cmd_download_finra_trace)
 
     trace_audit_parser = subparsers.add_parser("audit-trace-source-granularity")
     trace_audit_parser.add_argument("--sibling-root", default="..")

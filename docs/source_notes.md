@@ -28,18 +28,23 @@ reused from sibling outputs before new downloaders are added:
 ## Real backend inputs
 
 `offrun prepare-real-inputs --sibling-root .. --download-buybacks` writes ignored
-normalized inputs under `data/imported/`:
+normalized sibling and buyback inputs under `data/imported/`. `make real-package`
+then runs `offrun download-finra-trace-aggregates --frequency daily`, which writes
+ignored public FINRA daily XLSX files under `data/raw/finra/daily/`, converts
+them into `data/raw/finra/trace_treasury_aggregates.csv`, and imports the direct
+TRACE context into `data/imported/trace/trace_treasury_aggregates.csv`.
 
 - FiscalData buyback operations into `data/imported/buybacks/buyback_operations.csv`.
 - FiscalData/TreasuryDirect source-link status into
   `output/tables/buyback_source_reconciliation.csv` during panel construction.
 - [`tdcladder`](https://github.com/smkwray/tdcladder) bucket-level Treasury stock/liquidity context into
   `data/imported/tdcladder/monthly_ladder_panel.csv`.
-- Direct FINRA Treasury aggregate CSV exports into
-  `data/imported/trace/trace_treasury_aggregates.csv` when present under
-  `data/raw/finra/trace_treasury_aggregates.csv`; otherwise
-  [`tdcladder`](https://github.com/smkwray/tdcladder) public aggregate TRACE turnover into the
-  same normalized path.
+- Public FINRA daily Treasury aggregate files into
+  `data/imported/trace/trace_treasury_aggregates.csv`, preserving aggregate
+  maturity and on/off-run fields for Nominal Coupons and TIPS. If direct FINRA
+  files are unavailable, the backend falls back to
+  [`tdcladder`](https://github.com/smkwray/tdcladder) public aggregate TRACE turnover in the same
+  normalized path.
 - [`buycurve`](https://github.com/smkwray/buycurve) issuance/maturity context into
   `data/imported/buycurve/monthly_issuance_maturity_context.csv`.
 - [`buycurve`](https://github.com/smkwray/buycurve) cleaned New York Fed primary-dealer positions into
@@ -65,9 +70,9 @@ Public aggregate TRACE statistics can support descriptive volume or turnover con
 current real package uses the `tdcladder` broad aggregate turnover fallback, but
 FINRA's public daily and monthly Treasury aggregate files advertise remaining
 maturity and on/off-run groupings for Nominal Coupons and TIPS. `offrun
-import-finra-trace-aggregates --input <csv>` normalizes a local FINRA aggregate
-CSV export and preserves maturity and on/off-run fields when present. It still
-does not remove the CUSIP-level and transaction-level claim boundary.
+download-finra-trace-aggregates --frequency daily` downloads the public daily
+XLSX files, converts them to the package's direct TRACE CSV, and imports them.
+It still does not remove the CUSIP-level and transaction-level claim boundary.
 
 ## Dealer statistics boundary
 

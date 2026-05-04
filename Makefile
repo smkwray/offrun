@@ -31,6 +31,7 @@ real-package:
 	PYTHONPATH=src $(PYTHON) -m offrun validate-config
 	PYTHONPATH=src $(PYTHON) -m offrun validate-sibling-sources --sibling-root $(SIBLING_ROOT) --strict
 	PYTHONPATH=src $(PYTHON) -m offrun prepare-real-inputs --sibling-root $(SIBLING_ROOT) --download-buybacks
+	PYTHONPATH=src $(PYTHON) -m offrun download-finra-trace-aggregates --frequency daily
 	PYTHONPATH=src $(PYTHON) -m offrun audit-trace-source-granularity --sibling-root $(SIBLING_ROOT)
 	PYTHONPATH=src $(PYTHON) -m offrun build-buyback-operations-panel
 	PYTHONPATH=src $(PYTHON) -m offrun build-liquidity-context-panel

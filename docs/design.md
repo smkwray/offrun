@@ -15,12 +15,12 @@ Treasury buyback operations create dated interventions in older Treasury securit
 
 The default analysis panel is an event-window panel. Each row is a buyback operation, an event type, a window date, and a comparison maturity bucket. Targeted buckets and nearby controls are kept in the same panel with an explicit `targeted_bucket` indicator.
 
-The fixture build uses daily business-day windows. Real TRACE context is monthly
-public aggregate turnover unless a direct FINRA Treasury aggregate CSV export is
-available locally. Direct FINRA aggregate imports preserve maturity and on/off-run
-fields when present. Real dealer context is weekly aggregate Primary Dealer
-Statistics. The event-window join preserves those sources as aggregate context
-and does not imply CUSIP-level or transaction-level TRACE precision.
+The fixture build uses daily business-day windows. Real TRACE context uses public
+FINRA daily Treasury aggregate statistics when those public files are available.
+Those files preserve aggregate maturity and on/off-run fields for Nominal Coupons
+and TIPS. Real dealer context is weekly aggregate Primary Dealer Statistics. The
+event-window join preserves those sources as aggregate context and does not imply
+CUSIP-level or transaction-level TRACE precision.
 
 ## Minimal source pipeline
 
@@ -74,9 +74,9 @@ The generated report is required to describe the package as descriptive market-l
 
 ## TRACE source-quality extension
 
-The package includes a TRACE source-granularity audit and a direct FINRA
-aggregate CSV import path. The current real package still falls back to
-`tdcladder` broad public aggregate turnover when no FINRA export is available
-locally. Even with direct FINRA aggregate imports, the evidence remains aggregate
-public volume/turnover context, not CUSIP-level liquidity or causal pass-through
-evidence.
+The package includes a TRACE source-granularity audit plus direct FINRA daily
+aggregate file acquisition and conversion. The real package falls back to
+`tdcladder` broad public aggregate turnover only when direct FINRA files are not
+available. Even with direct FINRA aggregate imports, the evidence remains
+aggregate public volume/turnover context, not CUSIP-level liquidity or causal
+pass-through evidence.
