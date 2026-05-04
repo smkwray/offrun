@@ -23,6 +23,7 @@ paths:
   results_triage: output/tables/results_triage.csv
   coverage_qa: output/tables/coverage_qa.csv
   announcement_operation_summary: output/tables/announcement_operation_summary.csv
+  trace_source_granularity_audit: output/tables/trace_source_granularity_audit.csv
   source_inventory: output/tables/source_inventory.csv
   report: output/reports/offrun_accounting_report.md
   findings_report: output/reports/offrun_findings_report.md

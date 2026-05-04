@@ -18,6 +18,7 @@ from .panels import (
 )
 from .real_sources import download_fiscaldata_buybacks, prepare_real_inputs
 from .reports import write_offrun_report
+from .trace_audit import audit_trace_source_granularity
 from .validation import validate_offrun_package
 
 
@@ -146,6 +147,16 @@ def _cmd_prepare_real_inputs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_audit_trace_source(args: argparse.Namespace) -> int:
+    path = audit_trace_source_granularity(
+        _repo_root(args),
+        sibling_root=args.sibling_root,
+        output_path=args.output,
+    )
+    print(f"wrote {path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser."""
 
@@ -221,6 +232,11 @@ def build_parser() -> argparse.ArgumentParser:
     real_parser.add_argument("--buybacks-input", default=None)
     real_parser.add_argument("--download-buybacks", action="store_true")
     real_parser.set_defaults(func=_cmd_prepare_real_inputs)
+
+    trace_audit_parser = subparsers.add_parser("audit-trace-source-granularity")
+    trace_audit_parser.add_argument("--sibling-root", default="..")
+    trace_audit_parser.add_argument("--output", default=None)
+    trace_audit_parser.set_defaults(func=_cmd_audit_trace_source)
 
     return parser
 

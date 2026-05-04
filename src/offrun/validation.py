@@ -79,6 +79,7 @@ def validate_offrun_package(
         "results_triage",
         "coverage_qa",
         "announcement_operation_summary",
+        "trace_source_granularity_audit",
         "source_inventory",
         "report",
         "findings_report",
@@ -99,6 +100,7 @@ def validate_offrun_package(
         "results_triage",
         "coverage_qa",
         "announcement_operation_summary",
+        "trace_source_granularity_audit",
     ):
         _validate_csv_rows(config.path(key), failures)
 
@@ -114,6 +116,7 @@ def validate_offrun_package(
             ("results_triage", "results_triage"),
             ("coverage_qa", "coverage_qa"),
             ("announcement_operation_summary", "announcement_operation_summary"),
+            ("trace_source_granularity_audit", "trace_source_granularity_audit"),
         ):
             payload = datasets.get(dataset, {})
             if isinstance(payload, Mapping):

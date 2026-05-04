@@ -243,6 +243,12 @@ buckets for event-window alignment. Dealer financing and fails are aggregate
 Treasury/TIPS diagnostics. These outputs should therefore be read as market
 functioning screens around Treasury buybacks, not as CUSIP-level liquidity
 evidence or causal pass-through estimates.
+
+`output/tables/trace_source_granularity_audit.csv` records the next source
+upgrade path. FINRA's public daily and monthly aggregate Treasury files advertise
+remaining-maturity and on/off-run groupings for Nominal Coupons and TIPS, but
+they remain aggregate public files rather than CUSIP-level or transaction-level
+liquidity data.
 """
     write_text(output_path, text)
 
@@ -381,6 +387,8 @@ around Treasury buyback announcement and operation windows. The current build is
   claim-status labels.
 - `output/tables/announcement_operation_summary.csv` compares announcement-window and
   operation-window changes for each completed buyback operation.
+- `output/tables/trace_source_granularity_audit.csv` records whether public TRACE
+  source granularity can support better target-bucket or on/off-run diagnostics.
 - Buyback intensity is accepted amount scaled by sibling outstanding stock when the
   `tdcladder` denominator is available.
 
@@ -404,6 +412,7 @@ comparisons.
 - `output/tables/results_triage.csv`
 - `output/tables/coverage_qa.csv`
 - `output/tables/announcement_operation_summary.csv`
+- `output/tables/trace_source_granularity_audit.csv`
 - `output/tables/source_inventory.csv`
 - `output/figures/buyback_timeline.svg`
 - `output/figures/targeted_bucket_event_windows.svg`

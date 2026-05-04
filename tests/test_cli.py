@@ -27,6 +27,12 @@ def test_cli_fixture_smoke(temp_repo):
     ) == 0
     assert run_cli(
         temp_repo,
+        "audit-trace-source-granularity",
+        "--sibling-root",
+        str(fixture_root / "sibling_root"),
+    ) == 0
+    assert run_cli(
+        temp_repo,
         "build-buyback-operations-panel",
         "--input",
         str(fixture_root / "buybacks/buyback_operations_fixture.csv"),

@@ -53,6 +53,14 @@ they do not promote causal language or CUSIP-level liquidity claims.
 
 Public aggregate TRACE statistics can support descriptive volume or turnover context by broad category, depending on the exact public table used. They do not provide transaction-level or CUSIP-level liquidity evidence. Any production output that uses public aggregate TRACE data must label it as an aggregate proxy.
 
+`offrun audit-trace-source-granularity` writes
+`output/tables/trace_source_granularity_audit.csv`. The audit records that the
+current real package uses the `tdcladder` broad aggregate turnover fallback, but
+FINRA's public daily and monthly Treasury aggregate files advertise remaining
+maturity and on/off-run groupings for Nominal Coupons and TIPS. That is the
+right next source upgrade for target-bucket/off-run diagnostics. It still does
+not remove the CUSIP-level and transaction-level claim boundary.
+
 ## Dealer statistics boundary
 
 Primary Dealer Statistics are useful for positions, financing, and settlement-fails diagnostics. They are dealer-sector aggregates and should not be described as individual dealer balance sheets. Net-position rows are mapped to maturity buckets where the source series support that mapping; financing and fails rows are aggregate Treasury/TIPS diagnostics, not maturity-bucket-specific observations.

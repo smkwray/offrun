@@ -124,6 +124,7 @@ def validate_config(repo_root: Path | str | None = None) -> list[str]:
         "results_triage",
         "coverage_qa",
         "announcement_operation_summary",
+        "trace_source_granularity_audit",
         "source_inventory",
         "report",
         "findings_report",
@@ -206,6 +207,7 @@ def validate_config(repo_root: Path | str | None = None) -> list[str]:
         "results_triage",
         "coverage_qa",
         "announcement_operation_summary",
+        "trace_source_granularity_audit",
     ):
         dataset_payload = _require_mapping(datasets, dataset, "schemas.yml datasets")
         _require_sequence(dataset_payload, "required_columns", f"schemas.yml {dataset}")

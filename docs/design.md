@@ -56,3 +56,14 @@ The operations panel computes offered amount, accepted amount, and acceptance ra
 ## Output interpretation
 
 The generated report is required to describe the package as descriptive market-liquidity evidence. The validation gate rejects unqualified causal pass-through language and CUSIP-level liquidity language from public aggregate TRACE data.
+
+## TRACE source-quality extension
+
+The package now includes a TRACE source-granularity audit. The current real
+backend reuses `tdcladder` broad public aggregate turnover, which is useful for
+context but too coarse for clean target-bucket buyback claims. FINRA's public
+daily and monthly Treasury aggregate files advertise remaining maturity and
+on/off-run groupings for Nominal Coupons and TIPS, so the next implementable
+extension is direct ingestion of those aggregate files. Even with that upgrade,
+the evidence remains aggregate public volume/turnover context, not CUSIP-level
+liquidity or causal pass-through evidence.

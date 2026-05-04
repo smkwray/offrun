@@ -155,3 +155,18 @@ datasets:
       - operation_minus_announcement_trace_change
       - announcement_net_position_change
       - operation_net_position_change
+  trace_source_granularity_audit:
+    primary_key:
+      - source_surface
+    required_columns:
+      - source_surface
+      - frequency
+      - first_available
+      - security_scope
+      - remaining_maturity_detail
+      - on_off_run_detail
+      - volume_fields
+      - price_fields
+      - package_use
+      - claim_boundary
+      - upgrade_action

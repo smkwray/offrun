@@ -51,6 +51,7 @@ offrun validate-sibling-sources --sibling-root .. --strict
 offrun copy-sibling-outputs --sibling-root .. --overwrite
 offrun download-fiscaldata-buybacks
 offrun prepare-real-inputs --sibling-root .. --download-buybacks
+offrun audit-trace-source-granularity --sibling-root ..
 offrun build-buyback-operations-panel
 offrun build-liquidity-context-panel
 offrun build-offrun-panel
@@ -77,6 +78,7 @@ output/tables/event_diagnostics.csv
 output/tables/results_triage.csv
 output/tables/coverage_qa.csv
 output/tables/announcement_operation_summary.csv
+output/tables/trace_source_granularity_audit.csv
 output/tables/source_inventory.csv
 output/reports/offrun_accounting_report.md
 output/reports/offrun_findings_report.md
