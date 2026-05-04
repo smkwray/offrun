@@ -191,9 +191,7 @@ def _format_counts(counts: dict[str, int]) -> str:
 
 def _trace_source_note(trace_rows: list[dict[str, str]]) -> str:
     source_families = {row.get("source_family", "") for row in trace_rows}
-    has_finra_direct = any(
-        source.startswith("finra_treasury_aggregate") for source in source_families
-    )
+    has_finra_direct = any(source.startswith("finra_treasury_") for source in source_families)
     if has_finra_direct:
         return (
             "Direct FINRA Treasury aggregate rows are used when locally available. "
@@ -227,6 +225,7 @@ def _write_findings_report(
     output_path: Path,
     *,
     operation_rows: list[dict[str, str]],
+    trace_rows: list[dict[str, str]],
     triage_rows: list[dict[str, str]],
     coverage_rows: list[dict[str, str]],
     diagnostics_rows: list[dict[str, str]],
@@ -248,6 +247,7 @@ def _write_findings_report(
     avg_intensity = (
         sum(avg_intensity_values) / len(avg_intensity_values) if avg_intensity_values else None
     )
+    trace_source_note = _trace_source_note(trace_rows)
 
     top_table = _markdown_table(
         _top_rows(triage_rows),
@@ -292,11 +292,10 @@ potentially supportive direction while another is unavailable or points the
 other way. `coverage_limited` means the source support is too thin for that row
 to carry interpretive weight.
 
-The TRACE proxy is broad public aggregate turnover repeated across analysis
-buckets for event-window alignment. Dealer financing and fails are aggregate
-Treasury/TIPS diagnostics. These outputs should therefore be read as market
-functioning screens around Treasury buybacks, not as CUSIP-level liquidity
-evidence or causal pass-through estimates.
+{trace_source_note} Dealer financing and fails are aggregate Treasury/TIPS
+diagnostics. These outputs should therefore be read as market functioning screens
+around Treasury buybacks, not as CUSIP-level liquidity evidence or causal
+pass-through estimates.
 
 `output/tables/trace_source_granularity_audit.csv` records the next source
 upgrade path. FINRA's public daily and monthly aggregate Treasury files advertise
@@ -366,6 +365,7 @@ def write_offrun_report(
     _write_findings_report(
         config.path("findings_report"),
         operation_rows=operation_rows,
+        trace_rows=trace_context_rows,
         triage_rows=triage_rows,
         coverage_rows=coverage_rows,
         diagnostics_rows=diagnostics_rows,
