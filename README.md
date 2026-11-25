@@ -55,8 +55,6 @@ Builds write to `data/` and `output/`, which are not tracked.
 - Dealer positions are mapped to maturity buckets only where the New York Fed series allow; financing and fails are aggregate Treasury and TIPS series.
 - The package does not show that buybacks make long-duration debt money-like in the way Treasury bills are.
 
-[docs/claim_boundaries.md](docs/claim_boundaries.md) lists what the outputs can and cannot support.
-
 ## License
 
 MIT; see [LICENSE](LICENSE).

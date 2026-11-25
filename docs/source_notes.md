@@ -1,8 +1,8 @@
 # source notes
 
-## Sibling-first rule
+## Sibling inputs
 
-`offrun` should reuse sibling outputs before downloading or transforming new data.
+`offrun` reads these sibling outputs:
 
 - [`tdcladder`](https://github.com/smkwray/tdcladder): maturity/liquidity ladder context and TRACE-turnover precedent surfaces.
 - [`buycurve`](https://github.com/smkwray/buycurve): Treasury issuance composition, bill share, weighted-average maturity, and maturity context.
@@ -15,8 +15,7 @@ The source contracts live in `config/source_contracts.yml`. `offrun validate-sib
 
 The real backend can download and normalize FiscalData buyback operations with
 `offrun download-fiscaldata-buybacks` or as part of
-`offrun prepare-real-inputs --download-buybacks`. Other source families are
-reused from sibling outputs before new downloaders are added:
+`offrun prepare-real-inputs --download-buybacks`. The public sources are:
 
 - FiscalData Treasury Securities Buybacks dataset for operation-level buyback data.
 - TreasuryDirect buyback announcements/results links exposed through FiscalData for
@@ -77,7 +76,3 @@ It still does not remove the CUSIP-level and transaction-level claim boundary.
 ## Dealer statistics boundary
 
 Primary Dealer Statistics are useful for positions, financing, and settlement-fails diagnostics. They are dealer-sector aggregates and should not be described as individual dealer balance sheets. Net-position rows are mapped to maturity buckets where the source series support that mapping; financing and fails rows are aggregate Treasury/TIPS diagnostics, not maturity-bucket-specific observations. `output/tables/dealer_source_granularity_audit.csv` records that boundary explicitly.
-
-## Data policy
-
-Do not commit real raw data, imported sibling outputs, derived analysis panels, reports, figures, or manifests. The public repository should contain code, contracts, docs, and tiny synthetic fixtures only.
