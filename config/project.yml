@@ -4,7 +4,7 @@ project:
   version: 0.1.0
   purpose: >-
     Build a bounded Treasury buybacks and off-the-run liquidity evidence package
-    for Treasury Deposit Channel research.
+    for Treasury Deposit Component (TDC) research.
   core_question: >-
     Can Treasury buyback operations improve off-the-run Treasury liquidity or
     reduce dealer balance-sheet pressure in publicly observable data?
