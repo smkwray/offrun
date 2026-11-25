@@ -1,6 +1,6 @@
 # claim boundaries
 
-`offrun` is a market-liquidity sidecar for Treasury Deposit Channel (TDC) research. It does not directly estimate TDC and it does not identify domestic deposit pass-through.
+`offrun` is a market-liquidity sidecar for Treasury Deposit Component (TDC) research. It does not directly estimate TDC and it does not identify domestic deposit pass-through.
 
 ## Allowed language
 

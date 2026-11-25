@@ -33,3 +33,6 @@ output/**
 .DS_Store
 .vscode/
 .idea/
+
+# Local privacy denylist
+.private-denylist

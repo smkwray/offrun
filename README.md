@@ -1,124 +1,62 @@
 # offrun
 
-`offrun` builds a bounded Treasury buybacks and off-the-run liquidity evidence package for Treasury Deposit Channel (TDC) research.
+`offrun` builds a descriptive evidence package on whether U.S. Treasury buybacks show up in public measures of off-the-run Treasury liquidity (older securities that are no longer the newest issue at their maturity) and of dealer balance-sheet pressure. It supports research on the Treasury Deposit Component (TDC), the part of the change in bank deposits that comes from Treasury payments and trades in Treasury securities.
 
-The core question is whether Treasury buyback operations show up in publicly observable off-the-run Treasury liquidity proxies or dealer balance-sheet pressure diagnostics. The package is deliberately conservative: it produces descriptive market-liquidity evidence around dated buyback announcement and operation windows. It is not a causal domestic-liquidity pass-through estimator and it does not claim CUSIP-level liquidity from public aggregate TRACE data.
+The results are event-window comparisons on aggregate public data. They do not measure liquidity of individual securities (CUSIP level), and they are not causal estimates of buybacks' effect on domestic liquidity. A self-contained build runs from test fixtures; the real build also needs outputs from the sibling repositories [`tdcladder`](https://github.com/smkwray/tdcladder), [`buycurve`](https://github.com/smkwray/buycurve) and [`liqsub`](https://github.com/smkwray/liqsub), checked out next to this one.
 
-## Scope
+## What it builds
 
-The package implements both fixture smoke builds and a real local backend. It does not commit real raw data or generated outputs. The source strategy is:
+For each buyback operation, `offrun` builds windows around the announcement and operation dates and compares the targeted maturity bucket with nearby buckets. It joins those windows to aggregate trading volume and turnover from FINRA TRACE and to primary dealer positions, financing and settlement fails. It then adds pre-trend and placebo checks and gives each event an evidence grade based on source coverage and those checks. [docs/design.md](docs/design.md) describes the design.
 
-1. Reuse sibling outputs first:
-   - [`tdcladder`](https://github.com/smkwray/tdcladder) for maturity/liquidity ladder context and TRACE-turnover precedents;
-   - [`buycurve`](https://github.com/smkwray/buycurve) for Treasury issuance composition and maturity context;
-   - [`liqsub`](https://github.com/smkwray/liqsub) for liquidity-plumbing diagnostics;
-   - [`rowflow`](https://github.com/smkwray/rowflow) only as an optional rest-of-world sidecar.
-2. Use public primary sources only after the reusable sibling artifacts are unavailable or insufficient:
-   - FiscalData Treasury Securities Buybacks;
-   - TreasuryDirect buyback announcements/results;
-   - FINRA TRACE Treasury aggregate statistics at the public aggregate level only;
-   - New York Fed Primary Dealer Statistics;
-   - H.15 / GSW yield and rate controls only if needed.
+## Data sources
 
-## Install
+| Source | Used for |
+|---|---|
+| [Treasury FiscalData buyback operations](https://fiscaldata.treasury.gov/datasets/treasury-securities-buybacks/) | Operation dates, security type, maturity bucket, offered and accepted amounts (downloaded) |
+| [FINRA TRACE Treasury aggregates](https://www.finra.org/filing-reporting/trace/data/trace-treasury-aggregates/about) | Daily aggregate volume by maturity and on/off-the-run status for nominal coupons and Treasury Inflation-Protected Securities (TIPS) (downloaded) |
+| [New York Fed Primary Dealer Statistics](https://www.newyorkfed.org/markets/counterparties/primary-dealers-statistics) | Weekly dealer positions, financing and fails, read from `buycurve` |
+| `tdcladder` | Treasury supply by maturity bucket, and TRACE turnover when the direct FINRA files are unavailable |
+| `buycurve` | Issuance and maturity composition, primary dealer context |
+| `liqsub` | Monthly liquidity-substitution panel |
+| [`rowflow`](https://github.com/smkwray/rowflow) (optional) | Foreign net purchases of Treasuries, as context |
 
-Use an external virtual environment. Do not create a repo-local virtual environment.
+TRACE is FINRA's Trade Reporting and Compliance Engine. [docs/source_notes.md](docs/source_notes.md) has more on each source.
+
+## Install and run
+
+Requires Python 3.11 or later. The Makefile's default interpreter path does not exist on other machines, so pass `PYTHON` explicitly.
 
 ```bash
-python -m venv ~/venvs/offrun
-source ~/venvs/offrun/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -e '.[dev]'
-```
-
-## Smoke checks
-
-```bash
 python -m pytest -q
-ruff check .
-offrun validate-config
-make smoke-fixtures
+
+make smoke-fixtures PYTHON=python   # full package from the synthetic data in tests/fixtures/, no downloads
+make real-package PYTHON=python     # real data; set SIBLING_ROOT if the sibling repos are not in ..
 ```
 
-`make smoke-fixtures` builds a complete no-external-data package from the synthetic CSV files under `tests/fixtures/`.
+Each make target runs a sequence of `offrun` subcommands; `offrun --help` lists them.
 
-`make real-package` validates reusable sibling artifacts, downloads the FiscalData buyback operations feed and public FINRA daily Treasury aggregate files into ignored project-local raw data, normalizes sibling/source inputs into `data/imported/`, and builds the ignored real output package.
+## Outputs
 
-## CLI command map
+Builds write to `data/` and `output/`, which are not tracked.
 
-```bash
-offrun validate-config
-offrun validate-sibling-sources --sibling-root .. --strict
-offrun copy-sibling-outputs --sibling-root .. --overwrite
-offrun download-fiscaldata-buybacks
-offrun prepare-real-inputs --sibling-root .. --download-buybacks
-offrun download-finra-trace-aggregates --frequency daily
-offrun import-finra-trace-aggregates --input data/raw/finra/trace_treasury_aggregates.csv
-offrun audit-trace-source-granularity --sibling-root ..
-offrun build-buyback-operations-panel
-offrun build-liquidity-context-panel
-offrun build-offrun-panel
-offrun write-offrun-report
-offrun write-output-manifest
-offrun validate-offrun-package --strict
-```
+- `data/derived/`: normalized buyback operations, the event calendar, TRACE and dealer context, and the event-window panel (`offrun_panel.csv`).
+- `output/tables/`: event summaries, source reconciliation, pre-trend and placebo diagnostics, a ranked results triage, the evidence ledger, and coverage and source-granularity audits.
+- `output/reports/`: `offrun_accounting_report.md` and `offrun_findings_report.md`.
+- `output/figures/`: buyback timeline and event-window charts (SVG).
+- `output/manifests/offrun_manifest.json`: a manifest of the generated files.
 
-All commands accept an optional global `--repo-root <path>` argument before the subcommand for tests and scripted builds.
+## Limits
 
-## Generated local outputs
+- TRACE data are public aggregates by maturity bucket, not CUSIP-level or transaction-level data, and volume is a proxy for liquidity, not liquidity itself.
+- Targeted-versus-nearby comparisons and pre-trend and placebo checks test credibility; they do not show that buyback targets were chosen independently of market conditions.
+- Dealer positions are mapped to maturity buckets only where the New York Fed series allow; financing and fails are aggregate Treasury and TIPS series.
+- The package does not show that buybacks make long-duration debt money-like in the way Treasury bills are.
 
-The fixture and real builds write local artifacts under ignored `data/` and `output/` paths:
+[docs/claim_boundaries.md](docs/claim_boundaries.md) lists what the outputs can and cannot support.
 
-```text
-data/derived/buyback_operations.csv
-data/derived/buyback_event_calendar.csv
-data/derived/trace_liquidity_context.csv
-data/derived/dealer_liquidity_context.csv
-data/derived/liquidity_context_panel.csv
-data/derived/offrun_panel.csv
-output/tables/buyback_event_summary.csv
-output/tables/buyback_source_reconciliation.csv
-output/tables/event_diagnostics.csv
-output/tables/results_triage.csv
-output/tables/pretrend_diagnostics.csv
-output/tables/placebo_diagnostics.csv
-output/tables/dealer_source_granularity_audit.csv
-output/tables/evidence_ledger.csv
-output/tables/coverage_qa.csv
-output/tables/announcement_operation_summary.csv
-output/tables/trace_source_granularity_audit.csv
-output/tables/source_inventory.csv
-output/reports/offrun_accounting_report.md
-output/reports/offrun_findings_report.md
-output/figures/buyback_timeline.svg
-output/figures/targeted_bucket_event_windows.svg
-output/figures/evidence_grade_summary.svg
-output/figures/source_granularity_summary.svg
-output/manifests/offrun_manifest.json
-```
+## License
 
-These generated files are intentionally ignored by git. The repository should contain code, contracts, docs, and tiny fixtures only.
-
-The real backend currently uses FiscalData Treasury buyback operations, public FINRA daily Treasury aggregate statistics, [`tdcladder`](https://github.com/smkwray/tdcladder) bucket-level maturity/liquidity context, [`buycurve`](https://github.com/smkwray/buycurve) issuance/maturity and primary-dealer context, and [`liqsub`](https://github.com/smkwray/liqsub) monthly liquidity-plumbing context. FINRA daily files preserve public aggregate maturity and on/off-run fields for Nominal Coupons and TIPS. TRACE remains aggregate public data, not CUSIP-level or transaction-level liquidity. Dealer net positions are bucket-mapped where the NY Fed series support it; dealer financing and fails are aggregate Treasury/TIPS diagnostics.
-
-`output/tables/results_triage.csv` ranks operation/event rows and assigns descriptive
-claim-status labels. `output/reports/offrun_findings_report.md` summarizes those
-labels for interpretation while preserving the package's non-causal claim boundary.
-`output/tables/evidence_ledger.csv` adds an explicit source-limited evidence grade.
-
-## Claim boundary
-
-Allowed claims:
-
-- descriptive market-liquidity evidence;
-- event windows around buyback announcement and operation dates;
-- targeted maturity-bucket versus nearby-bucket comparisons when supported;
-- dealer-position, fails, and financing diagnostics.
-
-Forbidden without stronger evidence:
-
-- causal domestic liquidity pass-through claims;
-- CUSIP-level liquidity claims from public TRACE aggregate data;
-- exogeneity claims without pre-trend and control-bucket checks;
-- claims that buybacks make long-duration debt money-like in the same way as Treasury bills.
-
-`offrun validate-offrun-package --strict` enforces the report language gate. The report must include the phrase `descriptive market-liquidity evidence` and must not include unqualified phrases such as `proves causal liquidity effects` or `identifies domestic liquidity pass-through`.
+MIT; see [LICENSE](LICENSE).

@@ -1,6 +1,6 @@
 # offrun design
 
-`offrun` is a Treasury buybacks and off-the-run liquidity package for Treasury Deposit Channel (TDC) research. It is a market-functioning sidecar, not a replacement for a core TDC accounting estimator.
+`offrun` is a Treasury buybacks and off-the-run liquidity package for Treasury Deposit Component (TDC) research. It is a market-functioning sidecar, not a replacement for a core TDC accounting estimator.
 
 ## Research object
 
